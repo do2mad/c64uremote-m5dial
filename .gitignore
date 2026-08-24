@@ -1,0 +1,20 @@
+# PlatformIO
+.pio
+
+# VS Code
+.vscode/.browse.c_cpp.db*
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/ipch
+
+# Persoenliche Zugangsdaten - NIEMALS einchecken.
+# Vorlagen dafuer sind build_env.h.example und wifi.txt.example.
+src/build_env.h
+src-en/build_env.h
+build_env.h
+wifi.txt
+
+# Persoenliche Notizen und Systemkram
+Infos-mad/
+.DS_Store
+*.vor-wlan-backup

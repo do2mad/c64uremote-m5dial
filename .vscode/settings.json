@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.h": "cpp",
+        "*.cpp": "cpp"
+    },
+    "C_Cpp.default.cppStandard": "gnu++17",
+    "editor.rulers": [
+        100
+    ],
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true
+}

@@ -1,0 +1,27 @@
+# ---------------------------------------------------------------------------
+# C64uRemote - WLAN-Zugangsdaten fuer den M5Dial
+#
+# Diese Datei als  wifi.txt  in das Hauptverzeichnis der microSD-Karte legen.
+# Gelesen wird sie
+#   * beim Start, solange noch kein Netz im Geraet gespeichert ist
+#   * jederzeit ueber  Settings > WLAN > Von SD laden
+#
+# Es passen bis zu vier Netze hinein. Jede neue "ssid"-Zeile beginnt einen
+# neuen Eintrag; Leerzeilen und Zeilen mit # oder ; sind Kommentare.
+#
+# Achtung: die Passwoerter stehen hier im Klartext. Nach dem Einlesen sollte
+# die Datei von der Karte geloescht werden - im Geraet liegen sie danach im
+# internen Speicher (NVS).
+# ---------------------------------------------------------------------------
+
+ssid = MeinWLAN
+pass = MeinWlanPasswort
+
+# Zweites Netz, z. B. das Handy als Hotspot
+ssid = Hotspot
+pass = geheim123
+
+# Adresse und Passwort des Ultimate 64 / 1541 Ultimate II+ (optional).
+# Leer lassen heisst: es bleibt beim bisherigen Wert.
+host     = 192.168.0.64
+hostpass =

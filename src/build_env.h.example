@@ -1,0 +1,14 @@
+#pragma once
+// Diese Datei nach build_env.h kopieren und ausfuellen.
+//
+// Seit der WLAN-Einrichtung im Geraet sind das nur noch STARTWERTE. Sie
+// greifen genau so lange, bis zum ersten Mal etwas im Geraet gespeichert
+// wurde - ueber Settings > WLAN, ueber /wifi.txt auf der SD-Karte oder ueber
+// das Setup-Portal. Danach gilt der interne Speicher (NVS).
+//
+// Die Felder duerfen deshalb auch leer bleiben; der M5Dial verweist beim
+// ersten Start dann auf Settings > WLAN.
+#define C64U_WIFI_SSID     "MeinWLAN"
+#define C64U_WIFI_PASSWORD "MeinWlanPasswort"
+#define C64U_TARGET_HOST   "192.168.0.64"
+#define C64U_TARGET_PASSWORD ""
