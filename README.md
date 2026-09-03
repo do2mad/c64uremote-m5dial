@@ -148,13 +148,16 @@ CMD:RESET      CMD:REBOOT      CMD:MENU
 CMD:POWEROFF=0     sofort ausschalten
 CMD:POWEROFF=8     nachfragen, 8 s Zeit zum Bestätigen
 CMD:CPU=10         CPU auf 10 MHz
+CMD:JOY            Joystickports umschalten (Normal <-> Swapped)
+CMD:JOY=SWAPPED    Ports fest setzen; auch NORMAL, WASD1, WASD2
 ```
 
 Die Wartezeit steht also **auf der Karte**, `0` heißt ohne Nachfrage. Bestätigt
 wird durch erneutes Auflegen derselben Karte (die UID muss passen) oder per
 Taste; eine andere Karte oder ein abgelaufener Countdown brechen ab. Angelegt
 werden solche Karten über *Settings → NFC-Cmd*, die Liste enthält neben den
-festen Befehlen alle CPU-Stufen, die dein c64u anbietet.
+festen Befehlen die Joystick-Belegungen und alle CPU-Stufen, die dein c64u
+anbietet (rechts als *JOY* bzw. *CPU* gekennzeichnet).
 
 Fünf weitere Funktionen stecken im Menü **Settings** ganz oben:
 
@@ -296,7 +299,13 @@ Eingabe kehrt das Gerät automatisch dorthin zurück.
 ### Ring-Menü
 
 `PowerOff` · `Reset` · `Reboot` · `Ultimate Menu` · `CPU Speed` ·
-`RFID / NFC` · `SD-Karte` · `Connection Test` · `Status` · `Settings`
+`RFID / NFC` · `SD-Karte` · `Joystick Swap` · `Status` · `Settings`
+
+`Joystick Swap` tauscht die Joystickports im c64u (Config *U64 Specific
+Settings → Joystick Swapper*, Werte *Normal* / *Swapped* und je nach Firmware
+*WASD Port 1* / *WASD Port 2*); jeder Druck schaltet zwischen Normal und
+Swapped um. Der frühere Punkt `Connection Test` ist entfallen – dieselbe
+Prüfung löst ein Druck auf der `Status`-Seite aus.
 
 `PowerOff` fragt immer nach: erst beim **zweiten** Druck innerhalb des
 eingestellten Zeitfensters wird tatsächlich ausgeschaltet.
@@ -308,7 +317,8 @@ Anzeige (Animationen, Effekt, Tempo, Dauer, Helligkeit), Bedienung
 (Encoder-Empfindlichkeit, Home-Timeout, Tastenkürzel, PowerOff-Abfrage und
 -Zeitfenster), Upload (*Disk Action*: nur mounten / mounten + Reset /
 mounten + Reset + `LOAD"*",8,1` + `RUN`; *Disk Drive*: Laufwerk automatisch
-über Bus 8 suchen oder fest A/B), Beep und Factory Reset.
+über Bus 8 suchen oder fest A/B), *Joystick* (Portbelegung im c64u, schaltet
+durch alle vom Gerät gemeldeten Werte), Beep und Factory Reset.
 
 ---
 

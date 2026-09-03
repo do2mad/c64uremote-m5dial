@@ -110,7 +110,7 @@ Symbol ist größer und hell umrandet; sein Name erscheint kurz über dem Logo.
 | **CPU Speed** | CPU-Geschwindigkeit ansehen und ändern |
 | **RFID / NFC** | Karte auflegen und das gespeicherte Spiel starten |
 | **SD-Karte** | Ein Spiel direkt von der SD-Karte auswählen und starten |
-| **Connection Test** | Verbindung zum C64 sofort prüfen |
+| **Joystick Swap** | Vertauscht die Joystickports am C64 (Normal ↔ Swapped) |
 | **Status** | Ausführliche Verbindungsinfos |
 | **Settings** | Einstellungen und NFC-Werkzeuge |
 
@@ -124,6 +124,23 @@ Im Menü **CPU Speed** wählen. Oben steht die aktuelle Geschwindigkeit, darunte
 die Auswahlliste. Mit dem Drehring die gewünschte Stufe wählen, mit der Taste
 setzen. Der M5Dial liest die verfügbaren Stufen direkt vom C64 aus – du bekommst
 also genau die Werte, die dein Gerät kann.
+
+# Joystickports tauschen
+
+Manche Spiele erwarten den Joystick in Port 1, andere in Port 2. Statt das Kabel
+umzustecken, lässt sich die Belegung im C64 vertauschen.
+
+Im Menü **Joystick Swap** wählen – jeder Druck schaltet zwischen *Normal* und
+*Swapped* hin und her, kurz erscheint *JOY Swapped* bzw. *JOY Normal*.
+
+Unter *Settings → Joystick* steht der aktuelle Stand, und dort schaltest du durch
+alle Werte, die dein C64 anbietet: neben *Normal* und *Swapped* je nach Firmware
+auch *WASD P1* und *WASD P2* – dann steuert die Tastatur den jeweiligen Port.
+
+Einen eigenen Fernsteuerbefehl gibt es dafür in der Ultimate-Firmware nicht. Der
+M5Dial setzt die Einstellung *Joystick Swapper* in der C64-Konfiguration, genau
+wie bei der CPU-Geschwindigkeit. Der Stand bleibt deshalb erhalten, bis er wieder
+geändert wird – auch über einen Reset hinweg.
 
 # Spiele per Karte starten
 
@@ -200,13 +217,16 @@ tragen. Aufgelegt löst sie ihn sofort aus, ganz ohne Menü und ohne SD-Karte.
 | **PowerOff direkt** | Schaltet sofort aus |
 | **PowerOff mit Abfrage** | Fragt nach – zum Bestätigen die Karte innerhalb des Zeitfensters ein zweites Mal auflegen |
 | **CPU x MHz** | Stellt die CPU auf den auf der Karte hinterlegten Wert |
+| **Joystick tauschen** | Vertauscht die Joystickports (Normal ↔ Swapped) |
+| **Joystick Normal / Swapped / WASD P1 / WASD P2** | Setzt die Portbelegung fest auf diesen Wert |
 
 ## Eine Befehlskarte anlegen
 
 1. **NFC-Cmd** in den Einstellungen wählen.
 2. Aus der Liste den gewünschten Befehl aussuchen. Nach den festen Einträgen
-   folgen alle CPU-Stufen, die dein C64 anbietet – eine Karte „CPU 10 MHz" ist
-   also ein einziger Klick.
+   folgen erst die Joystick-Belegungen, dann alle CPU-Stufen, die dein C64
+   anbietet – eine Karte „CPU 10 MHz" ist also ein einziger Klick. Rechts steht
+   *JOY* oder *CPU*, damit du die beiden Blöcke auseinanderhältst.
 3. Karte auflegen, *KARTE OK* bedeutet: geschrieben und geprüft.
 
 ## PowerOff mit Abfrage
@@ -234,6 +254,8 @@ CMD:MENU
 CMD:POWEROFF=0      sofort ausschalten
 CMD:POWEROFF=8      nachfragen, 8 Sekunden Zeit
 CMD:CPU=10          CPU auf 10 MHz
+CMD:JOY             Joystickports umschalten
+CMD:JOY=SWAPPED     Ports fest setzen; auch NORMAL, WASD1, WASD2
 ```
 
 Groß- und Kleinschreibung sind egal. Dasselbe Format verstehen die M5Dial- und
@@ -401,7 +423,7 @@ Alle Einstellungen werden sofort gespeichert und überstehen einen Neustart.
 | **Encoder Steps** | Wie viele Rastschritte ein Menüschritt braucht (1, 2, 4, 6) |
 
 Für *Taste lang* und *Touch lang* stehen zur Wahl: *Off*, *Reset*, *Reboot*,
-*Menu* und *PowerOff*.
+*Menu*, *PowerOff* und *Joy Swap*.
 
 Reagiert das Menü beim Drehen zu hektisch, stelle *Encoder Steps* höher.
 
@@ -422,6 +444,7 @@ Reagiert das Menü beim Drehen zu hektisch, stelle *Encoder Steps* höher.
 |---|---|
 | **Disk Action** | *Mount* nur einlegen, *Mnt+Reset* zusätzlich Reset, *Mnt+Run* zusätzlich laden und starten |
 | **Disk Drive** | *Auto (8)* sucht das Laufwerk an Bus 8, sonst fest *A* oder *B* |
+| **Joystick** | Portbelegung im C64: *Normal*, *Swapped*, und je nach Firmware *WASD P1* / *WASD P2* |
 
 ## Sonstiges
 

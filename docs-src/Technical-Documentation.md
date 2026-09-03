@@ -412,6 +412,25 @@ Settings* and otherwise walks all categories until it finds an item whose name
 contains both "CPU" and "Speed". The list of choices comes from the `values`
 field of the response; if that fails, a built-in list is used.
 
+## Joystick ports
+
+There is no `machine:` command for swapping the joystick ports. The mapping is a
+configuration item - in testing *Joystick Swapper* in the category *U64 Specific
+Settings*, with the values `Normal`, `Swapped`, `WASD Port 2` and `WASD Port 1`.
+It is therefore set through `/v1/configs/<category>/<item>?value=…`, exactly like
+the clock speed.
+
+As with the clock, `resolveJoyPath()` looks in *U64 Specific Settings* first and
+otherwise walks all categories until an item name contains "Joystick", so a later
+firmware renaming it goes unnoticed. `refreshJoyChoices()` reads `values` and
+`current`.
+
+`joyTokenFromValue()` and `joyValueFromToken()` convert between the device value
+and the card token (`WASD Port 1` <-> `WASD1`), so a card needs neither a blank
+nor a firmware-specific spelling. `toggleJoystickSwap()` toggles between `Normal`
+and `Swapped` and returns to `Normal` from a WASD mode; `cycleJoystickValue()`
+walks through every reported value in the settings menu.
+
 ## Disk images and autostart
 
 When mounting a disk image, `type` and `mode` belong in the query and the file is
@@ -545,6 +564,8 @@ CMD:POWEROFF=0      power off immediately
 CMD:POWEROFF=8      ask first, 8 s confirmation window
 CMD:POWEROFF        ask first, using the device setting "NFC-Cmd PowOff"
 CMD:CPU=10          set the CPU to 10 MHz
+CMD:JOY             toggle the joystick ports (Normal <-> Swapped)
+CMD:JOY=SWAPPED     set the ports fixed; also NORMAL, WASD1, WASD2
 ```
 
 `parseCardCommand()` takes the text apart: check the prefix, split off an
@@ -702,7 +723,7 @@ The periodic connection test costs two HTTP calls with a 3 s timeout each and
 blocks the main loop accordingly; while it runs, the touchscreen is not polled.
 `refreshConnectionStatus()` therefore performs the periodic test only on the home
 screen and the status page. During interaction it runs on explicit request only
-(`force = true`), that is on *Connection Test* and when opening the status page.
+(`force = true`), that is when opening the status page and on a press there.
 
 ## Power-off safeguards
 

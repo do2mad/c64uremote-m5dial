@@ -412,6 +412,26 @@ und geht andernfalls alle Kategorien durch, bis ein Eintrag gefunden wird, desse
 Name sowohl „CPU" als auch „Speed" enthält. Die Auswahlliste kommt aus dem Feld
 `values` der Antwort; schlägt das fehl, greift eine fest eingebaute Liste.
 
+## Joystick-Ports
+
+Fuer das Tauschen der Joystickports gibt es keinen `machine:`-Befehl. Die
+Belegung ist ein Konfigurationseintrag, im Test *Joystick Swapper* in der
+Kategorie *U64 Specific Settings* mit den Werten `Normal`, `Swapped`,
+`WASD Port 2` und `WASD Port 1`. Gesetzt wird sie deshalb ueber
+`/v1/configs/<Kategorie>/<Eintrag>?value=…`, genau wie die Taktstufe.
+
+`resolveJoyPath()` sucht wie beim Takt zuerst in *U64 Specific Settings* und geht
+sonst alle Kategorien durch, bis ein Eintragsname „Joystick" enthaelt; ein
+Umbenennen durch eine spaetere Firmware faellt damit nicht auf. `refreshJoyChoices()`
+liest `values` und `current`.
+
+`joyTokenFromValue()` und `joyValueFromToken()` rechnen zwischen Geraetewert und
+Kartenkuerzel um (`WASD Port 1` <-> `WASD1`), damit auf einer Karte kein
+Leerzeichen und keine firmwarespezifische Schreibweise stehen muss.
+`toggleJoystickSwap()` schaltet zwischen `Normal` und `Swapped` um und landet aus
+einem WASD-Modus wieder auf `Normal`; `cycleJoystickValue()` geht im
+Settings-Menue der Reihe nach durch alle gemeldeten Werte.
+
 ## Disk-Images und Autostart
 
 Beim Einlegen eines Diskettenabbilds gehören `type` und `mode` in die Query, die
@@ -547,6 +567,8 @@ CMD:POWEROFF=0      sofort ausschalten
 CMD:POWEROFF=8      nachfragen, 8 s Bestaetigungsfenster
 CMD:POWEROFF        nachfragen mit der Geraeteeinstellung "NFC-Cmd PowOff"
 CMD:CPU=10          CPU auf 10 MHz
+CMD:JOY             Joystickports umschalten (Normal <-> Swapped)
+CMD:JOY=SWAPPED     Ports fest setzen; auch NORMAL, WASD1, WASD2
 ```
 
 `parseCardCommand()` zerlegt den Text: Praefix pruefen, optionales Argument
@@ -707,8 +729,8 @@ Der zyklische Verbindungstest kostet zwei HTTP-Aufrufe mit je 3 s Timeout und
 blockiert die Hauptschleife entsprechend; währenddessen wird der Touchscreen
 nicht abgefragt. `refreshConnectionStatus()` führt den zyklischen Test deshalb
 nur auf dem Startbild und auf der Statusseite aus. Während der Bedienung läuft er
-ausschließlich auf ausdrückliche Anforderung (`force = true`), also beim
-*Connection Test* und beim Öffnen der Statusseite.
+ausschließlich auf ausdrückliche Anforderung (`force = true`), also beim Öffnen
+der Statusseite und bei einem Druck auf ihr.
 
 ## PowerOff-Absicherung
 
