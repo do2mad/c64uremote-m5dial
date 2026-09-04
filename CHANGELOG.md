@@ -2,6 +2,55 @@
 
 C64uRemote für den **M5Dial**. Neueste Version zuerst.
 
+## v1.2.1 – 2026-09-04
+
+### Deutsch
+
+**Stabilere Verbindung zum c64u.** Der HTTP-Server der Ultimate-Firmware weist
+gelegentlich eine Verbindung ab („connection refused"), auch wenn Netz und
+Adresse in Ordnung sind. Das führte bisher sofort zu *FAILED* und zu *Not
+reached* in der Statuszeile.
+
+- Ein abgewiesener Aufruf wird nach kurzer Pause **einmal automatisch
+  wiederholt**. Nur bei Transportfehlern – dann ist beim c64u nichts
+  angekommen, ein Befehl kann sich also nicht doppeln.
+- Der zyklische Verbindungstest kostet nur noch **eine statt zwei Anfragen**,
+  wenn kein Passwort hinterlegt ist. Die zweite war byte-gleich mit der ersten.
+- Beim **Wiederverbinden** wird zuerst wieder das Netz versucht, mit dem es
+  zuletzt geklappt hat. Sind zwei Netze gespeichert und nur eines ist
+  erreichbar, wurde vorher nach jedem Aussetzer jedes zweite Mal zehn Sekunden
+  am toten Netz gewartet.
+- Ein Tastendruck wird **sofort** mit einem kurzen Ton bestätigt; die
+  Rückmeldung über Erfolg oder Fehler kommt danach. Vorher piepte das Gerät
+  erst nach dem Netzwerkaufruf – bei zähem Netz wirkte es dadurch, als sei die
+  Taste nicht angekommen.
+
+Hinweis: v1.2.0 gab es nur für Core und CoreS3 (Akkuanzeige). Ab dieser Version
+laufen wieder alle vier Geräte auf demselben Stand.
+
+### English
+
+**More robust connection to the c64u.** The HTTP server of the Ultimate firmware
+occasionally refuses a connection ("connection refused") even though network and
+address are fine. Until now that immediately produced *FAILED* and *Not reached*
+in the status line.
+
+- A refused call is **retried once automatically** after a short pause. Only on
+  transport errors - nothing reached the c64u then, so a command cannot be
+  doubled.
+- The periodic connection test now costs **one request instead of two** when no
+  password is stored. The second one was byte-identical to the first.
+- When **reconnecting**, the network that last worked is tried first. With two
+  networks stored of which only one is reachable, every other reconnect used to
+  waste ten seconds on the dead one.
+- A key press is acknowledged **immediately** with a short tone; the result,
+  success or failure, follows afterwards. Previously the device only beeped
+  after the network call - on a sluggish network that made it look as if the
+  press had been lost.
+
+Note: v1.2.0 existed for the Core and CoreS3 only (battery indicator). From this
+version on all four devices are back on the same footing.
+
 ## v1.1.0 – 2026-09-03
 
 ### Deutsch

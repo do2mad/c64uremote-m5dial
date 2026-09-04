@@ -455,6 +455,13 @@ Reagiert das Menü beim Drehen zu hektisch, stelle *Encoder Steps* höher.
 
 # Häufige Fragen
 
+**Ab und zu steht *Not reached* oder *Not verified*, kurz darauf geht es wieder.**
+Der HTTP-Server im c64u weist gelegentlich eine Verbindung ab („connection
+refused"), obwohl Netz und Adresse in Ordnung sind – das passiert auch dann,
+wenn nur ein einziges Gerät im Netz hängt. Seit v1.2.1 wiederholt die Firmware
+einen abgewiesenen Aufruf nach kurzer Pause von selbst, du merkst davon also
+meist nichts mehr. Bleibt es dauerhaft dabei, hilft ein Neustart des c64u.
+
 **Der Touch reagiert manchmal nicht.**
 Der gesamte äußere Ring ist aktiv, du musst die Symbole also nicht genau treffen.
 Reagiert trotzdem nichts, prüfe unter *Status*, ob die Verbindung steht – bei

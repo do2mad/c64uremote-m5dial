@@ -404,6 +404,39 @@ Header `X-Password` mitgesendet.
 | SID abspielen | POST | `/v1/runners:sidplay` |
 | MOD abspielen | POST | `/v1/runners:modplay` |
 
+## Abgewiesene Verbindungen
+
+Der HTTP-Server der Ultimate-Firmware nimmt jeweils nur eine Verbindung an und
+weist weitere mit einem TCP-RST ab; `HTTPClient` meldet das als *connection
+refused*. Beobachtet wurde das auch ohne ein zweites Gerät im Netz – es tritt
+also sporadisch auf und ist kein Funk- oder Adressproblem.
+
+Der eigentliche Aufruf ist deshalb nach `sendApiRequestOnce()` gewandert.
+`sendApiRequest()` ist nur noch ein Mantel darum: schlägt der Transport fehl
+(`httpCode <= 0`), folgt nach `kApiRetryDelayMs` (250 ms) ein zweiter Versuch.
+Wiederholt wird **ausschließlich** bei Transportfehlern – dann ist beim c64u
+nichts angekommen und ein Befehl kann sich nicht doppeln. HTTP-Fehlerstatus
+(4xx, 5xx) werden unverändert durchgereicht, und der Streaming-Upload in
+`uploadFile()` hat seinen eigenen Weg und bleibt unberührt.
+
+Zusätzlich spart `refreshConnectionStatus()` eine Anfrage: Ohne hinterlegtes
+Passwort wäre die zweite Abfrage byte-gleich mit der ersten, weil der Header
+`X-Password` nur gesetzt wird, wenn überhaupt eines da ist. Das halbiert die
+Grundlast auf dem c64u.
+
+## Wiederverbinden mit mehreren Netzen
+
+`beginWiFi()` schaltet nach jedem Versuch auf das nächste gespeicherte Profil
+weiter. Ohne Gegenmaßnahme heißt das: Sind zwei Netze hinterlegt und nur eines
+ist erreichbar, trifft es nach einem Aussetzer jedes zweite Mal das tote Netz
+und kostet einen kompletten Wiederholungstakt (`kWiFiRetryMs`, 10 s).
+
+`serviceWiFi()` merkt sich deshalb beim Verbinden über
+`wifiProfileIndex(WiFi.SSID())` das Profil, mit dem es geklappt hat, und legt es
+als nächsten Versuch fest; `gWifiNoted` sorgt dafür, dass das nur einmal je
+Verbindung passiert. Nach einem Aussetzer geht der erste Versuch damit wieder an
+das funktionierende Netz, das tote kommt nur dran, wenn das gute wirklich weg ist.
+
 ## CPU-Speed
 
 Der Pfad der Einstellung ist je nach Firmware unterschiedlich benannt. Deshalb

@@ -448,6 +448,13 @@ If the menu feels too twitchy when turning, raise *Encoder Steps*.
 
 # Frequently asked questions
 
+**Now and then *Not reached* or *Not verified* shows up and clears again.**
+The HTTP server in the c64u occasionally refuses a connection ("connection
+refused") although network and address are fine – this happens even with only a
+single device on the network. Since v1.2.1 the firmware retries a refused call
+by itself after a short pause, so you will usually not notice. If it stays that
+way, restarting the c64u helps.
+
 **Touch sometimes does not respond.**
 The whole outer ring is active, so you do not need to hit the icons precisely. If
 nothing happens at all, check on the *Status* page whether the connection is up –
