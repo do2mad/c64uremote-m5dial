@@ -30,6 +30,7 @@ und wurde von Martin Oswald (@mad, 1MHz.de) für den M5Dial erweitert.
 - Ein microSD-Modul, angeschlossen an Port A und Port B
   (Einbau siehe technische Dokumentation)
 - Eine microSD-Karte, FAT32 formatiert
+- Für den Betrieb ohne Kabel: ein Li-Ion-/LiPo-Akku 3,7 V mit Stecker 1,25 mm
 - NFC-Karten: empfohlen NTAG215, es gehen auch NTAG213/216 und MIFARE Classic
 
 Ohne SD-Karte laufen alle übrigen Funktionen normal weiter. Der NFC-Leser ist
@@ -48,7 +49,9 @@ weiterhin in `build_env.h` ein (siehe technische Dokumentation). Sie gelten dann
 als Startwerte für den allerersten Start.
 
 Der Verbindungsstatus ist immer sichtbar: ein kleiner **Punkt ganz oben** im
-runden Display.
+runden Display. Im Ring-Menü sitzt dort das Symbol *c64u Power Off*; hier
+zeigt deshalb das **Status-Symbol (i)** die Farbe – das Zeichen selbst und,
+solange es nicht ausgewählt ist, auch sein Rahmen.
 
 | Punkt | Bedeutung |
 |---|---|
@@ -103,7 +106,7 @@ Symbol ist größer und hell umrandet; sein Name erscheint kurz über dem Logo.
 
 | Symbol | Was passiert |
 |---|---|
-| **PowerOff** | Schaltet den C64 aus – zur Sicherheit zweimal drücken |
+| **c64u Power Off** | Schaltet den C64 aus – zur Sicherheit zweimal drücken. **Lang halten (1,5 s)** schaltet stattdessen den M5Dial aus |
 | **Reset** | Der C64 wird zurückgesetzt (wie die Reset-Taste) |
 | **Reboot** | Der C64 startet komplett neu |
 | **Ultimate Menu** | Öffnet oder schließt das Ultimate-Menü am C64 |
@@ -114,9 +117,14 @@ Symbol ist größer und hell umrandet; sein Name erscheint kurz über dem Logo.
 | **Status** | Ausführliche Verbindungsinfos |
 | **Settings** | Einstellungen und NFC-Werkzeuge |
 
-**Ausschalten (PowerOff):** Aus Versehen ausschalten wäre ärgerlich, deshalb
-kommt zuerst die Abfrage *POWER OFF? NOCHMAL!*. Erst ein zweiter Druck innerhalb
-des Zeitfensters schaltet wirklich aus.
+**C64 ausschalten (c64u Power Off):** Aus Versehen ausschalten wäre ärgerlich,
+deshalb kommt zuerst die Abfrage *c64u OFF? NOCHMAL!*. Erst ein zweiter Druck
+innerhalb des Zeitfensters schaltet wirklich aus.
+
+**M5Dial ausschalten:** Auf demselben Symbol die Taste – oder den Finger auf dem
+Symbol – **1,5 Sekunden gedrückt halten**. Es erscheint *AUS*; nach dem
+Loslassen ist der M5Dial aus. Lässt du früher los, bleibt es beim normalen
+c64u Power Off mit Abfrage.
 
 # CPU-Geschwindigkeit ändern
 
@@ -214,8 +222,9 @@ tragen. Aufgelegt löst sie ihn sofort aus, ganz ohne Menü und ohne SD-Karte.
 | **Reset** | Setzt den C64 zurück |
 | **Reboot** | Startet den C64 komplett neu |
 | **Ultimate Menu** | Öffnet oder schließt das Ultimate-Menü |
-| **PowerOff direkt** | Schaltet sofort aus |
-| **PowerOff mit Abfrage** | Fragt nach – zum Bestätigen die Karte innerhalb des Zeitfensters ein zweites Mal auflegen |
+| **c64u Off direkt** | Schaltet den C64 sofort aus |
+| **c64u Off mit Abfrage** | Fragt nach – zum Bestätigen die Karte innerhalb des Zeitfensters ein zweites Mal auflegen |
+| **M5Dial Power Off** | Schaltet den M5Dial selbst aus |
 | **CPU x MHz** | Stellt die CPU auf den auf der Karte hinterlegten Wert |
 | **Joystick tauschen** | Vertauscht die Joystickports (Normal ↔ Swapped) |
 | **Joystick Normal / Swapped / WASD P1 / WASD P2** | Setzt die Portbelegung fest auf diesen Wert |
@@ -233,7 +242,7 @@ tragen. Aufgelegt löst sie ihn sofort aus, ganz ohne Menü und ohne SD-Karte.
 
 Die Wartezeit steht **auf der Karte**, nicht im Gerät. Beim Anlegen wird der
 Wert aus *NFC-Cmd PowOff* übernommen (3, 5, 8 oder 15 Sekunden, Werkseinstellung
-8 s). Legst du so eine Karte auf, erscheint *POWER OFF? NOCHMAL!* mit einem
+8 s). Legst du so eine Karte auf, erscheint *c64u OFF? NOCHMAL!* mit einem
 Countdown. Zum Ausschalten:
 
 - die **gleiche Karte** noch einmal auflegen, oder
@@ -241,6 +250,13 @@ Countdown. Zum Ausschalten:
 
 Läuft der Countdown ab oder kommt eine andere Karte, passiert nichts. Eine Karte
 mit der Zeit **0** schaltet ohne Nachfrage sofort aus.
+
+## M5Dial per Karte ausschalten
+
+Eine Karte mit `CMD:M5OFF` schaltet den **M5Dial selbst** aus – ohne Nachfrage,
+weil das Auflegen schon eine bewusste Handlung ist. Damit eine Karte, die beim
+Einschalten noch aufliegt, das Gerät nicht gleich wieder abschaltet, wird sie in
+den ersten acht Sekunden nach dem Start ignoriert (*KARTE ABNEHMEN*).
 
 ## Was auf der Karte steht
 
@@ -253,6 +269,7 @@ CMD:REBOOT
 CMD:MENU
 CMD:POWEROFF=0      sofort ausschalten
 CMD:POWEROFF=8      nachfragen, 8 Sekunden Zeit
+CMD:M5OFF           den M5Dial selbst ausschalten
 CMD:CPU=10          CPU auf 10 MHz
 CMD:JOY             Joystickports umschalten
 CMD:JOY=SWAPPED     Ports fest setzen; auch NORMAL, WASD1, WASD2
@@ -393,6 +410,33 @@ gefundenen Netze oder von Hand – und optional Adresse und Passwort des C64.
 Nach dem Speichern schaltet der M5Dial den Accesspoint ab und verbindet sich
 mit dem neuen Netz. Dass die Browserverbindung dabei abbricht, ist normal.
 
+# Akkubetrieb und Ausschalten
+
+An die Akkubuchse des M5Dial (1,25 mm, 2-polig) passt ein einzelner
+Li-Ion-/LiPo-Akku mit 3,7 V. Geladen wird er, sobald das USB-Kabel steckt.
+
+**Ausschalten** – drei Wege:
+
+- im Ring-Menü auf *c64u Power Off* die Taste oder das Symbol **1,5 Sekunden
+  halten**,
+- *Einstellungen → M5Dial Power Off*, dann innerhalb von drei Sekunden ein
+  zweites Mal drücken (*M5DIAL OFF? NOCHMAL!*),
+- eine Befehlskarte `CMD:M5OFF` auflegen.
+
+Nach dem Loslassen der Taste ist der M5Dial aus. **Einschalten:** die Taste
+drücken.
+
+Steckt dabei das USB-Kabel, bleibt das Gerät versorgt. Es zeigt dann kurz
+*USB: Schlaf*, schaltet das Display ab und schläft, bis du die Taste drückst.
+Ziehst du das Kabel im Schlaf ab, ist der M5Dial ganz aus.
+
+Einen eigenen Schalter braucht der Akku nicht. Ausgeschaltet zieht der M5Dial nur
+wenige Mikroampere; ein voller Akku hält so viele Monate. Wer das Gerät länger
+als ein halbes Jahr weglegt, lädt es zwischendurch einmal nach.
+
+Eine Anzeige der Akkuspannung gibt es nicht: Der M5Dial hat dafür keine
+Messleitung.
+
 # Einstellungen im Überblick
 
 Alle Einstellungen werden sofort gespeichert und überstehen einen Neustart.
@@ -409,6 +453,7 @@ Alle Einstellungen werden sofort gespeichert und überstehen einen Neustart.
 | **NFC-Cmd** | Befehlskarte anlegen (siehe Kapitel *Befehlskarten*) |
 | **NFC-Cmd PowOff** | Vorgabe für die Abfragezeit einer PowerOff-Befehlskarte: 3, 5, 8, 15 s |
 | **WLAN** | Untermenü der WLAN-Einrichtung (siehe Kapitel *WLAN einrichten*) |
+| **M5Dial Power Off** | Schaltet den M5Dial selbst aus – zweimal drücken (siehe Kapitel *Akkubetrieb und Ausschalten*) |
 
 ## Bedienung
 

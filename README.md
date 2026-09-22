@@ -64,13 +64,14 @@ braucht genau vier Leitungen – also werden **beide Ports** belegt.
 |---|---|---|---|
 | `SCK`  / `CLK` | Port A, Pin „SCL" | rot     | **G15** |
 | `MOSI` / `SI` / `CMD` | Port A, Pin „SDA" | rot     | **G13** |
-| `MISO` / `SO` / `DAT0` | Port B, Signalpin 2 | schwarz | **G2** |
-| `CS`   / `SS` | Port B, Signalpin 1 | schwarz | **G1** |
+| `MISO` / `SO` / `DAT0` | Port B, Pin 3 (gelbe Ader) | schwarz | **G2** |
+| `CS`   / `SS` | Port B, Pin 4 (weiße Ader) | schwarz | **G1** |
 | `GND` | Port A **oder** B, GND | beide | GND |
 | `VCC` | siehe Abschnitt Spannung | | |
 
-Grove HY2.0-4P, Pinbelegung von außen: `1 = GND`, `2 = 5V`, `3 = erster
-Signalpin`, `4 = zweiter Signalpin`.
+Grove HY2.0-4P: `1 = GND` (schwarz), `2 = 5V` (rot), `3` (gelb), `4` (weiß).
+Port A: gelb = G13, weiß = G15. **Port B: gelb = G2, weiß = G1** – hier liegt
+die kleinere Nummer außen. Bis v1.2.1 stand das in der Doku vertauscht.
 
 Die Pins stehen als Konstanten ganz oben in `src/main.cpp` und lassen sich dort
 in einer Zeile ändern:
@@ -78,8 +79,8 @@ in einer Zeile ändern:
 ```cpp
 constexpr int kSdSckPin  = 15;   // Port A, Pin "SCL"
 constexpr int kSdMosiPin = 13;   // Port A, Pin "SDA"
-constexpr int kSdMisoPin = 2;    // Port B, zweiter Signalpin
-constexpr int kSdCsPin   = 1;    // Port B, erster Signalpin
+constexpr int kSdMisoPin = 2;    // Port B, Pin 3 (gelbe Ader)
+constexpr int kSdCsPin   = 1;    // Port B, Pin 4 (weisse Ader)
 ```
 
 ### Spannung – bitte einmal genau hinsehen
@@ -147,6 +148,7 @@ der sofort ausgeführt wird — ohne Menü und ohne SD-Karte:
 CMD:RESET      CMD:REBOOT      CMD:MENU
 CMD:POWEROFF=0     sofort ausschalten
 CMD:POWEROFF=8     nachfragen, 8 s Zeit zum Bestätigen
+CMD:M5OFF          den M5Dial selbst ausschalten
 CMD:CPU=10         CPU auf 10 MHz
 CMD:JOY            Joystickports umschalten (Normal <-> Swapped)
 CMD:JOY=SWAPPED    Ports fest setzen; auch NORMAL, WASD1, WASD2
@@ -298,7 +300,7 @@ Eingabe kehrt das Gerät automatisch dorthin zurück.
 
 ### Ring-Menü
 
-`PowerOff` · `Reset` · `Reboot` · `Ultimate Menu` · `CPU Speed` ·
+`c64u Power Off` · `Reset` · `Reboot` · `Ultimate Menu` · `CPU Speed` ·
 `RFID / NFC` · `SD-Karte` · `Joystick Swap` · `Status` · `Settings`
 
 `Joystick Swap` tauscht die Joystickports im c64u (Config *U64 Specific
@@ -307,18 +309,29 @@ Settings → Joystick Swapper*, Werte *Normal* / *Swapped* und je nach Firmware
 Swapped um. Der frühere Punkt `Connection Test` ist entfallen – dieselbe
 Prüfung löst ein Druck auf der `Status`-Seite aus.
 
-`PowerOff` fragt immer nach: erst beim **zweiten** Druck innerhalb des
-eingestellten Zeitfensters wird tatsächlich ausgeschaltet.
+`c64u Power Off` fragt immer nach: erst beim **zweiten** Druck innerhalb des
+eingestellten Zeitfensters wird der C64 tatsächlich ausgeschaltet. **1,5 s
+gedrückt halten** (Taste oder Finger auf dem Symbol) schaltet dagegen den
+**M5Dial** aus.
 
 ### Settings
 
-WLAN (siehe [Abschnitt 3a](#3a-wlan-einrichten)),
+WLAN (siehe [Abschnitt 3a](#3a-wlan-einrichten)), *M5Dial Power Off* (siehe unten),
 Anzeige (Animationen, Effekt, Tempo, Dauer, Helligkeit), Bedienung
 (Encoder-Empfindlichkeit, Home-Timeout, Tastenkürzel, PowerOff-Abfrage und
 -Zeitfenster), Upload (*Disk Action*: nur mounten / mounten + Reset /
 mounten + Reset + `LOAD"*",8,1` + `RUN`; *Disk Drive*: Laufwerk automatisch
 über Bus 8 suchen oder fest A/B), *Joystick* (Portbelegung im c64u, schaltet
 durch alle vom Gerät gemeldeten Werte), Beep und Factory Reset.
+
+### Akku und Ausschalten
+
+An der Akkubuchse (1,25 mm, 2-polig) kann ein Li-Ion-/LiPo-Akku 3,7 V hängen;
+geladen wird per USB. *Settings → M5Dial Power Off* (zweimal drücken), 1,5 s
+Halten auf *c64u Power Off* oder eine Karte `CMD:M5OFF` schalten den M5Dial ab (G46/HOLD auf LOW, Ruhestrom laut M5Stack rund 2 µA). Die Taste
+schaltet wieder ein. Am USB-Kabel schläft das Gerät stattdessen, bis die Taste
+gedrückt wird. Eine Spannungsanzeige gibt es nicht – der M5Dial hat keine
+Messleitung zum Akku (Details in der technischen Dokumentation).
 
 ---
 
@@ -366,6 +379,7 @@ die sieben Basiskommandos. Neu bzw. überarbeitet:
 | Symptom | Ursache / Abhilfe |
 |---|---|
 | `KEINE SD-KARTE` | Verkabelung prüfen, Karte FAT32, Modul-Versorgung (3,3 V?) prüfen, Grove-Kabel kürzen |
+| `KEINE SD-KARTE` nach Aufbau laut Doku bis v1.2.1 | Port B: gelbe und weiße Ader tauschen – gelb = MISO (G2), weiß = CS (G1) |
 | `KEIN NFC-LESER` | Serielle Ausgabe ansehen: `RFID (I2C 0x28) VersionReg = …`. `0x00`/`0xFF` heißt: kein Kontakt zum internen Bus |
 | `SETTINGS > WLAN` | noch kein WLAN gespeichert – über *Settings → WLAN* einrichten |
 | `c64u-ADRESSE FEHLT` | WLAN steht, aber die Zieladresse fehlt – Setup-Portal oder `host =` in `wifi.txt` |

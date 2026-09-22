@@ -2,6 +2,73 @@
 
 C64uRemote für den **M5Dial**. Neueste Version zuerst.
 
+## v1.3.0 – 2026-09-22
+
+### Deutsch
+
+**Korrektur der SD-Verdrahtung (Port B).** In der Dokumentation waren an Port B
+die beiden Signalpins vertauscht. Richtig ist: **gelbe Ader (Pin 3) = G2 =
+MISO**, **weiße Ader (Pin 4) = G1 = CS**. Wer nach der alten Anleitung verdrahtet
+hat, bekommt *KEINE SD-KARTE* und muss nur diese zwei Adern tauschen. Die
+Firmware selbst war richtig; korrigiert sind technische Dokumentation, README
+und die Kommentare in `main.cpp`.
+
+**Den M5Dial selbst ausschalten – drei Wege.**
+
+- Im Ring-Menü auf **c64u Power Off** die Taste oder das Symbol **1,5 s
+  halten**. Kürzer gedrückt bleibt es das gewohnte Ausschalten des C64 mit
+  Abfrage.
+- **Einstellungen → M5Dial Power Off**, direkt nach *WLAN*, zweimal drücken.
+- **Befehlskarte `CMD:M5OFF`** (in *NFC-Cmd* als *M5Dial Power Off*). In den
+  ersten 8 s nach dem Start wird sie ignoriert, damit eine aufliegende Karte das
+  Gerät nicht sofort wieder abschaltet.
+
+Im Akkubetrieb geht G46/HOLD auf LOW (Ruhestrom rund 2 µA); die Taste schaltet
+wieder ein. Am USB-Kabel schläft das Gerät stattdessen, bis die Taste gedrückt
+wird. Neues Kapitel *Akkubetrieb und Ausschalten* in beiden Handbüchern.
+
+**Klarere Texte.** Das Menüsymbol heißt jetzt *c64u Power Off*, die Abfragen
+*c64u OFF? NOCHMAL!* bzw. *M5DIAL OFF? NOCHMAL!* – so ist immer klar, welches
+Gerät ausgeht.
+
+**Verbindungsstatus im Ring-Menü sichtbar.** Der grüne Statuspunkt oben lag
+unter dem Power-Off-Symbol. Im Ring-Menü zeigt jetzt das Status-Symbol (i) die
+Verbindungsfarbe (grün / blau / gelb / rot).
+
+Hinweis: v1.3.0 gibt es nur für den M5Dial.
+
+### English
+
+**SD wiring correction (Port B).** The documentation had the two signal pins on
+Port B swapped. Correct is: **yellow wire (pin 3) = G2 = MISO**, **white wire
+(pin 4) = G1 = CS**. Anyone who wired it according to the old instructions gets
+*KEINE SD-KARTE* and only has to swap these two wires. The firmware itself was
+right; fixed are the technical documentation, README and the comments in
+`main.cpp`.
+
+**Switching the M5Dial itself off - three ways.**
+
+- In the ring menu on **c64u Power Off**, **hold** the button or the icon for
+  **1.5 s**. A shorter press stays the usual C64 power-off with prompt.
+- **Settings → M5Dial Power Off**, directly after *WiFi*, press twice.
+- **Command card `CMD:M5OFF`** (listed in *NFC-Cmd* as *M5Dial Power Off*). It
+  is ignored for the first 8 s after start, so a card lying on the device does
+  not switch it straight off again.
+
+On battery G46/HOLD goes LOW (about 2 µA standby); the button switches it back
+on. With the USB cable attached the device sleeps instead until the button is
+pressed. New chapter *Battery operation and switching off* in both manuals.
+
+**Clearer texts.** The menu icon is now called *c64u Power Off*, the prompts
+*c64u OFF? AGAIN!* and *M5DIAL OFF? AGAIN!* - so it is always clear which device
+goes off.
+
+**Connection status visible in the ring menu.** The green status dot at the top
+sat under the Power Off icon. In the ring menu the Status icon (i) now shows the
+connection colour (green / blue / yellow / red).
+
+Note: v1.3.0 exists for the M5Dial only.
+
 ## v1.2.1 – 2026-09-04
 
 ### Deutsch

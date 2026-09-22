@@ -48,10 +48,14 @@ RFID2**.
 
 Externally the M5Dial only exposes two Grove connectors (HY2.0-4P):
 
-| Connector | Colour | Pin 1 | Pin 2 | Pin 3 | Pin 4 |
+| Connector | Colour | Pin 1 (black) | Pin 2 (red) | Pin 3 (yellow) | Pin 4 (white) |
 |---|---|---|---|---|---|
 | Port A | red | GND | 5 V | GPIO 13 (SDA) | GPIO 15 (SCL) |
-| Port B | black | GND | 5 V | GPIO 1 | GPIO 2 |
+| Port B | black | GND | 5 V | GPIO 2 | GPIO 1 |
+
+**Mind Port B:** the yellow wire (pin 3) is GPIO 2, the white one (pin 4) is
+GPIO 1 - the lower number sits on the outside. Up to v1.2.1 this documentation
+had the two swapped.
 
 That is exactly four free signal pins — precisely what SPI needs for an SD card,
 which is why both ports are used.
@@ -81,22 +85,22 @@ SD cards are specified for 3.3 V only.
 
 ## Wiring
 
-| SD module | M5Dial | GPIO | Constant in `main.cpp` |
-|---|---|---|---|
-| `SCK` / `CLK` | Port A, pin 4 | 15 | `kSdSckPin` |
-| `MOSI` / `SI` / `CMD` | Port A, pin 3 | 13 | `kSdMosiPin` |
-| `MISO` / `SO` / `DAT0` | Port B, pin 4 | 2 | `kSdMisoPin` |
-| `CS` / `SS` | Port B, pin 3 | 1 | `kSdCsPin` |
-| `GND` | Port A or B, pin 1 | – | – |
-| `VCC` | see below | – | – |
+| SD module | M5Dial | Wire | GPIO | Constant in `main.cpp` |
+|---|---|---|---|---|
+| `SCK` / `CLK` | Port A, pin 4 | white | 15 | `kSdSckPin` |
+| `MOSI` / `SI` / `CMD` | Port A, pin 3 | yellow | 13 | `kSdMosiPin` |
+| `MISO` / `SO` / `DAT0` | Port B, pin 3 | yellow | 2 | `kSdMisoPin` |
+| `CS` / `SS` | Port B, pin 4 | white | 1 | `kSdCsPin` |
+| `GND` | Port A or B, pin 1 | black | – | – |
+| `VCC` | see below | red | – | – |
 
 The assignment can be changed in four lines at the top of `src/main.cpp`:
 
 ```cpp
 constexpr int kSdSckPin  = 15;   // Port A, pin "SCL"
 constexpr int kSdMosiPin = 13;   // Port A, pin "SDA"
-constexpr int kSdMisoPin = 2;    // Port B, second signal pin
-constexpr int kSdCsPin   = 1;    // Port B, first signal pin
+constexpr int kSdMisoPin = 2;    // Port B, pin 3 (yellow wire)
+constexpr int kSdCsPin   = 1;    // Port B, pin 4 (white wire)
 ```
 
 ## Supply voltage
@@ -150,6 +154,84 @@ if (!app.sdReady) app.sdReady = SD.begin(kSdCsPin, sdSpi, 1000000);
 
 That keeps a build with longer Grove cables working, just more slowly. The SD bus
 sits on **SPI3 (HSPI)**; SPI2 belongs to the display.
+
+# Battery operation and switching off
+
+## Connecting a battery
+
+The M5Dial has a battery connector (JST 1.25 mm, 2-pin) for a single Li-ion/LiPo
+cell (3.7 V nominal). Charging happens via USB-C; the charger sits on the board.
+No on/off switch is needed, because the M5Dial switches itself:
+
+| Signal | GPIO | Function |
+|---|---|---|
+| HOLD | 46 | Self-hold. HIGH = stays on, LOW = disconnects the battery |
+| WAKE / button | 42 | Switches on; during operation the normal button (LOW = pressed) |
+
+`M5Dial.begin()` (M5Unified) drives G46 HIGH right at the start. According to
+M5Stack about **1.9 µA** flow at 4.2 V while switched off.
+
+## Battery voltage
+
+The voltage **cannot be shown without extra hardware**. The M5Dial has neither a
+voltage divider from the battery to an ADC pin nor a readable charger IC (its
+CHRG/STDBY outputs are not connected to the ESP32). M5Unified knows no PMIC for
+the M5Dial, so `M5.Power.getBatteryLevel()` returns **-2**. On top of that the
+four free GPIOs are taken by the SD card.
+
+A fuel-gauge IC such as the **MAX17048** could be added on the internal I²C bus
+(G11/G12). Its address is **0x36**, so it clashes neither with touch (0x38), RTC
+(0x51) nor RFID (0x28).
+
+## Three ways to switch off
+
+**Long press on "c64u Power Off".** `handleButton()` treats `kMenuPowerOff` in
+the ring menu separately: the button has to be held for `kDialOffHoldMs`
+(1.5 s), then `shutdownDevice()` follows directly. The generic 600 ms shortcut
+(back) does not apply on this icon; released earlier, `handleSelect()` runs as
+usual with the c64u prompt. `handleTouch()` does the same when the touch started
+on the icon (`menuIndexFromTouch()`); the touch shortcut is not fired there.
+
+**Command card `CMD:M5OFF`** (also `CMD:DIALOFF`): `CardCmd::DialOff` calls
+`shutdownDevice()` without a prompt. During the first `kDialOffBootGuardMs`
+(8 s) after start the card is ignored (*REMOVE CARD*); otherwise a card lying on
+the device would switch it straight off again at every power-up. In the
+*NFC-Cmd* list the command appears as *M5Dial Power Off*.
+
+**Settings → "M5Dial Power Off".** From v1.3.0 it sits directly below *WiFi*. Like
+*WiFi* it is handled in `activateSetting()` before the NFC check and therefore
+needs no NFC reader.
+
+1. First press: `requestShutdown()` records the request and shows
+   *M5DIAL OFF? AGAIN!*; the list shows *AGAIN*.
+2. Second press within `kShutdownAskMs` (3 s): `shutdownDevice()`.
+
+`shutdownDevice()` shows *OFF*, **waits until the button is released** (it would
+otherwise bridge the self-hold), ends SD and Wi-Fi and pulls G46 LOW. On battery
+the device is off at that moment.
+
+With USB or another external supply attached the ESP32 keeps running despite
+HOLD = LOW. After 1.5 s the firmware therefore briefly shows *USB: sleep*,
+switches the display off and enters light sleep; it is woken by a GPIO wakeup on
+G42 (G42 is not an RTC pin, so ext0 deep-sleep wakeup is not possible there).
+After waking, `esp_restart()` follows. HOLD stays LOW during sleep: pulling the
+cable then switches the M5Dial off completely.
+
+Alternatively the **RST button** on the back also switches off on battery,
+because G46 is no longer driven during the reset.
+
+## Standby current and shelf life
+
+Switched off, the M5Dial draws about 2 µA according to the datasheet; the
+protection circuit of a typical cell adds 1 to 6 µA. For a 650 mAh battery that
+is below 0.1 mAh per month in total - negligible. What counts is the cell's own
+**self-discharge** (roughly 1 to 3 % per month). Fully charged, the battery
+therefore lasts many months switched off; after half a year it should still be
+above 80 %.
+
+Precondition: the SD module hangs on the 5 V line of the Grove connectors and is
+switched off with it. Measuring once is worthwhile: multimeter in µA/mA mode in
+the battery's positive lead, switch the M5Dial off - it should show a few µA.
 
 # Build environment
 
@@ -335,6 +417,12 @@ The main loop runs at roughly 30 fps (`kFrameMs = 33`):
 6. `render()` — compose and push the frame
 
 ## Rendering on the round display
+
+**Connection status in the ring menu.** `drawRoundFrame(withStatus, withDot)`
+draws the status dot at y = 14. In the ring menu it would sit right under the
+*c64u Power Off* icon, so `drawMainMenu()` calls `drawRoundFrame(true, false)`
+and colours the Status icon (`kMenuStatus`) with `connectionColor()` instead -
+the glyph always, the frame only while it is not selected.
 
 The StampS3 has no PSRAM. A full-screen buffer at 240 × 240 × 2 bytes takes
 115 kB and does fit in the heap, so the firmware allocates it as an `M5Canvas`
@@ -594,6 +682,7 @@ CMD:MENU
 CMD:POWEROFF=0      power off immediately
 CMD:POWEROFF=8      ask first, 8 s confirmation window
 CMD:POWEROFF        ask first, using the device setting "NFC-Cmd PowOff"
+CMD:M5OFF           switch the M5Dial itself off (also CMD:DIALOFF)
 CMD:CPU=10          set the CPU to 10 MHz
 CMD:JOY             toggle the joystick ports (Normal <-> Swapped)
 CMD:JOY=SWAPPED     set the ports fixed; also NORMAL, WASD1, WASD2
@@ -760,10 +849,13 @@ screen and the status page. During interaction it runs on explicit request only
 
 Two separate mechanisms:
 
-- **PowerOff menu entry:** `requestPowerOff()` sets `pendingPowerOff`; only a
+- **c64u Power Off menu entry:** `requestPowerOff()` sets `pendingPowerOff`; only a
   second press within *PowerOff Zeit* powers down. This always applies.
 - **PowerOff shortcut:** depending on *PowerOff Abfrage* either immediately or
   with a confirmation prompt (`comboPowerOff`) acknowledged by another press.
+
+The M5Dial itself has its own safeguard, see *Battery operation and switching
+off*: press twice in the settings, hold for 1.5 s in the ring menu.
 
 # Persistence
 
@@ -804,6 +896,7 @@ M5Dial-C64uRemote/
 | *SET build_env.h* at startup | credentials missing |
 | *KEIN NFC-LESER* | check the serial output: `RFID (I2C 0x28) VersionReg = …`. `0x00`/`0xFF` means no contact with the internal bus |
 | *KEINE SD-KARTE* | wiring, module supply voltage, FAT32, cable length |
+| *KEINE SD-KARTE* after wiring per docs up to v1.2.1 | swap the yellow and white wire on Port B: yellow = MISO (G2), white = CS (G1) |
 | Status dot yellow (*AUTH?*) | `C64U_TARGET_PASSWORD` is wrong |
 | *Invalid type* when mounting | `type`/`mode` belong in the query, not as a multipart text field |
 | *LADEN ZU LANG* | loading exceeds 180 s; check the image or set *Disk Action* to *Mnt+Reset* |

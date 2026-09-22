@@ -33,7 +33,7 @@
 //
 //  Hardware-Erweiterung microSD:  siehe README.md, Abschnitt "Verkabelung".
 //      SCK  = G15 (Port A, weisse Ader)      MOSI = G13 (Port A, gelbe Ader)
-//      MISO = G2  (Port B, weisse Ader)      CS   = G1  (Port B, gelbe Ader)
+//      MISO = G2  (Port B, gelbe Ader)       CS   = G1  (Port B, weisse Ader)
 //  Die Pins stehen als Konstanten weiter unten und lassen sich dort aendern.
 //
 //  Speicherhinweis: der StampS3 hat kein PSRAM. Der Offscreen-Puffer belegt
@@ -51,6 +51,8 @@
 #include <Preferences.h>
 #include <WebServer.h>
 #include <DNSServer.h>
+#include <esp_sleep.h>
+#include <driver/gpio.h>
 
 #include <algorithm>
 #include <cctype>
@@ -86,6 +88,7 @@ constexpr uint32_t kConnectionProbeMs = 15000;
 constexpr uint32_t kWifiCardConnectMs = 8000;
 constexpr uint32_t kFrameMs           = 33;     // ~30 fps
 constexpr uint32_t kLongPressMs       = 600;
+constexpr uint32_t kDialOffHoldMs     = 1500;  // lang auf "c64u Power Off" = M5Dial aus
 constexpr uint32_t kRfidPollMs        = 250;
 // Steht "Home Timeout" auf Off, faellt eine von der Hintergrundabfrage
 // geoeffnete Leseseite trotzdem nach dieser Zeit zum Startbild zurueck.
@@ -137,11 +140,11 @@ constexpr uint8_t kRfidAddr = 0x28;
 // microSD am SPI-Bus. Der M5Dial hat nur zwei Grove-Buchsen mit insgesamt
 // vier freien GPIOs - deshalb werden beide Ports benutzt.
 //   Port A (rot,   HY2.0-4P):  G13 / G15
-//   Port B (schwarz, HY2.0-4P): G1  / G2
+//   Port B (schwarz, HY2.0-4P): G2 (gelb) / G1 (weiss)
 constexpr int kSdSckPin  = 15;   // Port A, Pin "SCL"
 constexpr int kSdMosiPin = 13;   // Port A, Pin "SDA"
-constexpr int kSdMisoPin = 2;    // Port B, zweiter Signalpin
-constexpr int kSdCsPin   = 1;    // Port B, erster Signalpin
+constexpr int kSdMisoPin = 2;    // Port B, Pin 3 (gelbe Ader)
+constexpr int kSdCsPin   = 1;    // Port B, Pin 4 (weisse Ader)
 
 // SPI3 (HSPI) ist frei; SPI2 gehoert dem Display.
 SPIClass sdSpi(HSPI);
@@ -185,7 +188,7 @@ enum MenuId : uint8_t {
 };
 
 constexpr const char* kMenuLabels[kMenuCount] = {
-    "PowerOff", "Reset", "Reboot", "Ultimate Menu", "CPU Speed",
+    "c64u Power Off", "Reset", "Reboot", "Ultimate Menu", "CPU Speed",
     "RFID / NFC", "SD-Karte", "Joystick Swap", "Status", "Settings",
 };
 
@@ -200,6 +203,7 @@ enum SettingsId : uint8_t {
   kSetNfcCmd,          // letzte NFC-Aktion; danach kommen Schalter
   kSetCardConfirm,     // Abfragezeit der PowerOff-Befehlskarte (NFC-Cmd)
   kSetWifi,            // Aktion, wird in activateSetting() vorab behandelt
+  kSetShutdown,        // M5Dial ausschalten, ebenfalls vorab behandelt
   kSetShortcutBtn,
   kSetShortcutTouch,
   kSetAutoNfc,
@@ -235,6 +239,7 @@ constexpr const char* kSettingsItems[] = {
     "NFC-Cmd",
     "NFC-Cmd PowOff",
     "WLAN",
+    "M5Dial Power Off",
     "Taste lang",
     "Touch lang",
     "Auto-NFC",
@@ -324,6 +329,7 @@ enum class CardCmd : uint8_t {
   UltiMenu,
   PowerOff,        // Argument = Bestaetigungszeit in Sekunden, 0 = sofort
   CpuSpeed,        // Argument = gewuenschter Wert, z. B. "10"
+  DialOff,         // M5Dial selbst ausschalten ("CMD:M5OFF")
   JoySwap,         // Argument = Zielwert; ohne Argument wird umgeschaltet
 };
 
@@ -464,6 +470,8 @@ struct AppState {
 
   bool     pendingPowerOff     = false;    // Menue: zweites Druecken bestaetigt
   uint32_t pendingPowerOffAtMs = 0;
+  bool     pendingShutdown     = false;    // "M5Dial aus": zweites Druecken schaltet ab
+  uint32_t pendingShutdownAtMs = 0;
   bool     comboPowerOff       = false;    // Tastenkuerzel: Rueckfrage laeuft
   uint32_t comboPowerOffAtMs   = 0;
 
@@ -590,7 +598,7 @@ const uint16_t kColLine    = rgb565(66, 96, 132);
 const uint16_t kColLineHi  = rgb565(184, 228, 255);
 const uint16_t kColText    = rgb565(212, 226, 248);
 const uint16_t kColLabel   = rgb565(156, 190, 228);
-const uint16_t kColOk      = rgb565(110, 230, 170);
+const uint16_t kColOk      = rgb565(80, 255, 0);
 const uint16_t kColWarn    = rgb565(255, 190, 84);
 const uint16_t kColErr     = rgb565(255, 120, 96);
 const uint16_t kColInfo    = rgb565(120, 220, 255);
@@ -739,7 +747,7 @@ const char* shortcutLabel(ShortcutAction a) {
     case ShortcutAction::Reset:    return "Reset";
     case ShortcutAction::Reboot:   return "Reboot";
     case ShortcutAction::UltiMenu: return "Menu";
-    case ShortcutAction::PowerOff: return "PowerOff";
+    case ShortcutAction::PowerOff: return "c64u Off";
     case ShortcutAction::JoySwap:  return "Joy Swap";
     default:                       return "Off";
   }
@@ -1540,7 +1548,7 @@ void performMenuButton(uint32_t now) { clearPendingPowerOff(); simpleCommand("/v
 
 void performPowerOff(uint32_t now) {
   clearPendingPowerOff();
-  simpleCommand("/v1/machine:poweroff", "POWER OFF", "POWEROFF FAILED", kColWarn, now);
+  simpleCommand("/v1/machine:poweroff", "c64u POWER OFF", "POWEROFF FAILED", kColWarn, now);
 }
 
 void requestPowerOff(uint32_t now) {
@@ -1551,7 +1559,7 @@ void requestPowerOff(uint32_t now) {
   app.pendingPowerOff     = true;
   app.pendingPowerOffAtMs = now;
   beep(900, 60);
-  setModal("POWER OFF? NOCHMAL!", kColWarn, now, powerOffConfirmMs());
+  setModal("c64u OFF? NOCHMAL!", kColWarn, now, powerOffConfirmMs());
 }
 
 void setCpuSpeed(int cpuIndex, uint32_t now) {
@@ -3688,6 +3696,7 @@ String sanitizeCardText(const String& text) {
 //     CMD:POWEROFF=0      sofort ausschalten
 //     CMD:POWEROFF=8      nachfragen, 8 s Zeit fuer die Bestaetigung
 //     CMD:POWEROFF        nachfragen mit der am Geraet eingestellten Zeit
+//     CMD:M5OFF           den M5Dial selbst ausschalten (auch CMD:DIALOFF)
 //     CMD:CPU=10          CPU auf 10 MHz stellen
 //     CMD:JOY             Joystickports umschalten (Normal <-> Swapped)
 //     CMD:JOY=SWAPPED     Ports fest setzen; auch NORMAL, WASD1, WASD2
@@ -3725,6 +3734,7 @@ bool parseCardCommand(const String& text, CardCommand* out) {
   else if (body == "REBOOT")   cmd.cmd = CardCmd::Reboot;
   else if (body == "MENU")     cmd.cmd = CardCmd::UltiMenu;
   else if (body == "POWEROFF") cmd.cmd = CardCmd::PowerOff;
+  else if (body == "M5OFF" || body == "DIALOFF") cmd.cmd = CardCmd::DialOff;
   else if (body == "CPU")      cmd.cmd = CardCmd::CpuSpeed;
   else if (body == "JOY" || body == "JOYSTICK") cmd.cmd = CardCmd::JoySwap;
   else return false;
@@ -3751,6 +3761,7 @@ String cardCommandText(const CardCommand& c) {
     case CardCmd::Reboot:   return "CMD:REBOOT";
     case CardCmd::UltiMenu: return "CMD:MENU";
     case CardCmd::PowerOff: return "CMD:POWEROFF=" + String(cardPowerOffSeconds(c));
+    case CardCmd::DialOff:  return "CMD:M5OFF";
     case CardCmd::CpuSpeed: return "CMD:CPU=" + c.arg;
     case CardCmd::JoySwap:  return (c.hasArg && !c.arg.isEmpty())
                                    ? ("CMD:JOY=" + joyTokenFromValue(c.arg))
@@ -3766,9 +3777,10 @@ String cardCommandLabel(const CardCommand& c) {
     case CardCmd::UltiMenu: return "Ultimate Menu";
     case CardCmd::PowerOff: {
       const uint8_t sec = cardPowerOffSeconds(c);
-      return sec == 0 ? String("PowerOff direkt")
-                      : ("PowerOff, " + String(sec) + "s Abfrage");
+      return sec == 0 ? String("c64u Off direkt")
+                      : ("c64u Off, " + String(sec) + "s Abfrage");
     }
+    case CardCmd::DialOff:  return "M5Dial Power Off";
     case CardCmd::CpuSpeed: return "CPU " + c.arg + " MHz";
     case CardCmd::JoySwap:  return (c.hasArg && !c.arg.isEmpty())
                                    ? ("Joystick " + joyLabelFromToken(c.arg))
@@ -3780,7 +3792,7 @@ String cardCommandLabel(const CardCommand& c) {
 // ---- Auswahlliste zum Beschreiben einer Karte -----------------------------
 // Feste Befehle zuerst, danach die Joystickwerte und die CPU-Stufen, die
 // der c64u anbietet.
-constexpr size_t kCmdFixedCount = 6;
+constexpr size_t kCmdFixedCount = 7;
 
 size_t cmdListCount() { return kCmdFixedCount + app.joyChoiceCount + app.cpuChoiceCount; }
 
@@ -3796,7 +3808,8 @@ CardCommand cmdListAt(size_t index) {
       c.arg    = String(app.settings.cardConfirmS);
       c.hasArg = true;
       return c;
-    case 5: c.cmd = CardCmd::JoySwap; return c;   // umschalten, ohne Argument
+    case 5: c.cmd = CardCmd::DialOff; return c;
+    case 6: c.cmd = CardCmd::JoySwap; return c;   // umschalten, ohne Argument
     default: break;
   }
   size_t rest = index - kCmdFixedCount;
@@ -4212,13 +4225,13 @@ const char* connectionText() {
 }
 
 // Runder Rahmen mit kleinem Statuspunkt oben und Hardware-Kuerzeln unten.
-void drawRoundFrame(bool withStatus = true) {
+void drawRoundFrame(bool withStatus = true, bool withDot = true) {
   gDraw->fillCircle(kCx, kCy, kRing, kColBg);
   gDraw->drawCircle(kCx, kCy, kRing, kColLine);
   gDraw->drawCircle(kCx, kCy, kRing - 1, rgb565(40, 62, 92));
   if (!withStatus) return;
 
-  gDraw->fillCircle(kCx, 14, 4, connectionColor());
+  if (withDot) gDraw->fillCircle(kCx, 14, 4, connectionColor());
   fontSmall();
   drawClipped(app.rfidReady ? "NFC" : "-", kCx - 26, 226, 30, app.rfidReady ? kColOk : kColLine, middle_center);
   drawClipped(app.sdReady ? "SD" : "-", kCx + 26, 226, 30, app.sdReady ? kColOk : kColLine, middle_center);
@@ -4315,7 +4328,9 @@ int menuIndexFromTouch(int tx, int ty) {
 
 void drawMainMenu(uint32_t now) {
   beginFrame();
-  drawRoundFrame();
+  // Oben sitzt das PowerOff-Symbol und verdeckt den Statuspunkt. Im Ring-
+  // Menue zeigt deshalb das Status-Symbol (i) die Verbindungsfarbe.
+  drawRoundFrame(true, false);
   drawMenuCenterLogo();
 
   for (size_t i = 0; i < static_cast<size_t>(kMenuCount); ++i) {
@@ -4331,6 +4346,10 @@ void drawMainMenu(uint32_t now) {
     if (i == kMenuPowerOff) {
       border = selected ? kColWarn : rgb565(120, 80, 40);
       if (app.pendingPowerOff) fill = rgb565(140, 70, 30);
+    }
+    if (i == kMenuStatus) {
+      icon = connectionColor();
+      if (!selected) border = icon;
     }
     if (i == kMenuRfidRun  && !app.rfidReady) icon = kColLine;
     if (i == kMenuSdBrowse && !app.sdReady)   icon = kColLine;
@@ -4479,6 +4498,7 @@ String settingsValue(size_t index) {
       value += (gWifiCount == 1) ? " Netz" : " Netze";
       return value;
     }
+    case kSetShutdown:      return app.pendingShutdown ? "NOCHMAL" : "Jetzt";
     case kSetShortcutBtn:   return shortcutLabel(app.settings.shortcutButton);
     case kSetShortcutTouch: return shortcutLabel(app.settings.shortcutTouch);
     case kSetAutoNfc:       return app.rfidReady ? autoNfcLabel(app.settings.autoNfc) : String("kein NFC");
@@ -4785,7 +4805,7 @@ void drawRfidScreen() {
   if (app.cardPowerOffPending) {
     const int32_t left = static_cast<int32_t>(app.cardPowerOffUntilMs - millis());
     fontText();
-    drawCentered(String("POWER OFF? ") + String(std::max<int32_t>(0, left) / 1000 + 1) + "s",
+    drawCentered(String("c64u OFF? ") + String(std::max<int32_t>(0, left) / 1000 + 1) + "s",
                  188, kColWarn);
     drawHint("Karte nochmal oder Taste");
   } else {
@@ -5167,12 +5187,88 @@ void wifiSavedSelect(uint32_t now) {
   wifiConnectProfile(static_cast<size_t>(index), now);
 }
 
+// ---------------------------------------------------------------------------
+// M5Dial selbst ausschalten (Einstellungen -> "M5Dial aus")
+// ---------------------------------------------------------------------------
+// Im Akkubetrieb haelt sich der M5Dial ueber G46 (HOLD) selbst eingeschaltet;
+// M5Unified setzt den Pin in begin() auf HIGH. Geht er auf LOW, trennt die
+// Selbsthaltung den Akku - laut M5Stack bleiben dann rund 2 uA Ruhestrom.
+// Eingeschaltet wird wieder mit der Taste (WAKE).
+//
+// Solange die Taste gedrueckt ist, ueberbrueckt sie die Selbsthaltung.
+// Deshalb wird erst nach dem Loslassen abgeschaltet.
+//
+// Haengt USB oder eine andere externe Quelle dran, laeuft der ESP32 trotz
+// HOLD = LOW weiter. Dann gehen Display und Funk aus, und das Geraet schlaeft
+// (Light-Sleep), bis die Taste gedrueckt wird; danach folgt ein Neustart.
+// HOLD bleibt dabei LOW: wird das Kabel im Schlaf abgezogen, ist der M5Dial
+// sofort ganz aus.
+constexpr int      kPowerHoldPin    = 46;     // Selbsthaltung (HOLD)
+constexpr int      kWakeButtonPin   = 42;     // Taste, LOW = gedrueckt
+constexpr uint32_t kShutdownAskMs   = 3000;
+constexpr uint32_t kDialOffBootGuardMs = 8000;
+
+void shutdownDevice() {
+  M5Dial.Display.fillScreen(TFT_BLACK);
+  M5Dial.Display.setTextDatum(middle_center);
+  M5Dial.Display.setTextColor(kColWarn, TFT_BLACK);
+  M5Dial.Display.setTextSize(3);
+  M5Dial.Display.drawString("AUS", kCx, kCy);
+  beep(1200, 60);
+  delay(90);
+  beep(700, 120);
+  delay(150);
+
+  const uint32_t t0 = millis();
+  while (digitalRead(kWakeButtonPin) == LOW && millis() - t0 < 5000) delay(10);
+  delay(300);
+
+  if (app.sdReady) SD.end();
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+
+  pinMode(kPowerHoldPin, OUTPUT);
+  digitalWrite(kPowerHoldPin, LOW);
+  delay(1500);
+
+  M5Dial.Display.fillScreen(TFT_BLACK);
+  M5Dial.Display.setTextSize(2);
+  M5Dial.Display.drawString("USB: Schlaf", kCx, kCy);
+  delay(1200);
+  M5Dial.Display.setBrightness(0);
+  M5Dial.Display.sleep();
+
+  while (digitalRead(kWakeButtonPin) == LOW) delay(10);
+  delay(50);
+  gpio_wakeup_enable(static_cast<gpio_num_t>(kWakeButtonPin), GPIO_INTR_LOW_LEVEL);
+  esp_sleep_enable_gpio_wakeup();
+  esp_light_sleep_start();
+  esp_restart();
+}
+
+void requestShutdown(uint32_t now) {
+  if (app.pendingShutdown && (now - app.pendingShutdownAtMs <= kShutdownAskMs)) {
+    app.pendingShutdown = false;
+    shutdownDevice();
+    return;
+  }
+  app.pendingShutdown     = true;
+  app.pendingShutdownAtMs = now;
+  beep(900, 60);
+  setModal("M5DIAL OFF? NOCHMAL!", kColWarn, now, kShutdownAskMs);
+}
+
 void activateSetting(uint32_t now) {
   // Die ersten Eintraege sind Aktionen, keine Einstellungen. Der WLAN-Punkt
   // braucht keinen NFC-Leser und wird deshalb vorab behandelt.
   if (app.settingsIndex == kSetWifi) {
     beep(2200, 25);
     openWifiMenu(now);
+    return;
+  }
+
+  if (app.settingsIndex == kSetShutdown) {
+    requestShutdown(now);
     return;
   }
 
@@ -5417,7 +5513,7 @@ void runShortcut(ShortcutAction action, uint32_t now) {
       if (app.settings.powerOffComboAsk) {
         app.comboPowerOff     = true;
         app.comboPowerOffAtMs = now;
-        setModal("POWER OFF ?  TASTE = JA", kColWarn, now, powerOffConfirmMs());
+        setModal("c64u OFF?  TASTE = JA", kColWarn, now, powerOffConfirmMs());
       } else {
         performPowerOff(now);
       }
@@ -5482,9 +5578,21 @@ void runCardCommand(const CardCommand& cmd, const String& uid, uint32_t now) {
       app.cardPowerOffUntilMs = now + sec * 1000u;
       beep(900, 60);
       app.rfidHint = "Karte nochmal auflegen";
-      setModal("POWER OFF? NOCHMAL!", kColWarn, now, sec * 1000u);
+      setModal("c64u OFF? NOCHMAL!", kColWarn, now, sec * 1000u);
       return;
     }
+
+    case CardCmd::DialOff:
+      // Eine Karte, die beim Einschalten noch aufliegt, wuerde das Geraet
+      // sofort wieder abschalten - deshalb in den ersten Sekunden ignorieren.
+      if (millis() < kDialOffBootGuardMs) {
+        beep(500, 120);
+        setModal("KARTE ABNEHMEN", kColWarn, now, 1500);
+        return;
+      }
+      rfidRelease();
+      shutdownDevice();
+      return;
 
     case CardCmd::JoySwap:
       beep(2400, 40);
@@ -5987,6 +6095,22 @@ void handleButton(uint32_t now) {
     noteInteraction(now);
   }
 
+  // Im Ring-Menue auf "c64u Power Off": langer Druck (1,5 s) schaltet den
+  // M5Dial selbst aus. Kuerzer losgelassen bleibt es der normale Menuepunkt.
+  if (app.screen == ScreenMode::Menu && app.menuIndex == kMenuPowerOff) {
+    if (!app.buttonHandled && M5Dial.BtnA.pressedFor(kDialOffHoldMs)) {
+      app.buttonHandled = true;
+      clearPendingPowerOff();
+      shutdownDevice();
+    }
+    if (M5Dial.BtnA.wasReleased() && !app.buttonHandled) {
+      noteInteraction(now);
+      beep(2000, 20);
+      handleSelect(now);
+    }
+    return;
+  }
+
   if (!app.buttonHandled && M5Dial.BtnA.pressedFor(kLongPressMs)) {
     app.buttonHandled = true;
     noteInteraction(now);
@@ -6119,6 +6243,14 @@ void handleTouch(uint32_t now) {
       app.touchStartX   = touch.x;
       app.touchStartY   = touch.y;
       noteInteraction(now);
+    } else if (!app.touchLongDone && app.screen == ScreenMode::Menu &&
+               menuIndexFromTouch(app.touchStartX, app.touchStartY) == kMenuPowerOff) {
+      // Langes Beruehren von "c64u Power Off" schaltet den M5Dial aus.
+      if (now - app.touchStartMs >= kDialOffHoldMs) {
+        app.touchLongDone = true;
+        clearPendingPowerOff();
+        shutdownDevice();
+      }
     } else if (!app.touchLongDone &&
                (app.screen == ScreenMode::Home || app.screen == ScreenMode::Menu) &&
                now - app.touchStartMs >= kLongPressMs) {
@@ -6260,6 +6392,9 @@ void loop() {
   }
   if (app.comboPowerOff && (now - app.comboPowerOffAtMs > powerOffConfirmMs())) {
     app.comboPowerOff = false;
+  }
+  if (app.pendingShutdown && (now - app.pendingShutdownAtMs > kShutdownAskMs)) {
+    app.pendingShutdown = false;
   }
   if (app.cardPowerOffPending &&
       static_cast<int32_t>(now - app.cardPowerOffUntilMs) >= 0) {

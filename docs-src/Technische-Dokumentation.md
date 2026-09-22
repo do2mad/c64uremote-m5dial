@@ -49,10 +49,14 @@ anders als bei der Core-Version.
 
 Nach außen führt der M5Dial nur zwei Grove-Buchsen (HY2.0-4P):
 
-| Buchse | Farbe | Pin 1 | Pin 2 | Pin 3 | Pin 4 |
+| Buchse | Farbe | Pin 1 (schwarz) | Pin 2 (rot) | Pin 3 (gelb) | Pin 4 (weiß) |
 |---|---|---|---|---|---|
 | Port A | rot | GND | 5 V | GPIO 13 (SDA) | GPIO 15 (SCL) |
-| Port B | schwarz | GND | 5 V | GPIO 1 | GPIO 2 |
+| Port B | schwarz | GND | 5 V | GPIO 2 | GPIO 1 |
+
+**Achtung bei Port B:** Die gelbe Ader (Pin 3) ist GPIO 2, die weiße (Pin 4)
+GPIO 1 – die kleinere Nummer liegt also außen. Bis v1.2.1 stand das in dieser
+Dokumentation vertauscht.
 
 Das sind genau vier freie Signalpins – exakt so viele, wie SPI für eine
 SD-Karte braucht. Beide Ports werden deshalb belegt.
@@ -82,22 +86,22 @@ Micro-SD-Karten sind ausschließlich für 3,3 V spezifiziert.
 
 ## Verdrahtung
 
-| SD-Modul | M5Dial | GPIO | Konstante in `main.cpp` |
-|---|---|---|---|
-| `SCK` / `CLK` | Port A, Pin 4 | 15 | `kSdSckPin` |
-| `MOSI` / `SI` / `CMD` | Port A, Pin 3 | 13 | `kSdMosiPin` |
-| `MISO` / `SO` / `DAT0` | Port B, Pin 4 | 2 | `kSdMisoPin` |
-| `CS` / `SS` | Port B, Pin 3 | 1 | `kSdCsPin` |
-| `GND` | Port A oder B, Pin 1 | – | – |
-| `VCC` | siehe unten | – | – |
+| SD-Modul | M5Dial | Ader | GPIO | Konstante in `main.cpp` |
+|---|---|---|---|---|
+| `SCK` / `CLK` | Port A, Pin 4 | weiß | 15 | `kSdSckPin` |
+| `MOSI` / `SI` / `CMD` | Port A, Pin 3 | gelb | 13 | `kSdMosiPin` |
+| `MISO` / `SO` / `DAT0` | Port B, Pin 3 | gelb | 2 | `kSdMisoPin` |
+| `CS` / `SS` | Port B, Pin 4 | weiß | 1 | `kSdCsPin` |
+| `GND` | Port A oder B, Pin 1 | schwarz | – | – |
+| `VCC` | siehe unten | rot | – | – |
 
 Die Zuordnung lässt sich in vier Zeilen am Kopf von `src/main.cpp` ändern:
 
 ```cpp
 constexpr int kSdSckPin  = 15;   // Port A, Pin "SCL"
 constexpr int kSdMosiPin = 13;   // Port A, Pin "SDA"
-constexpr int kSdMisoPin = 2;    // Port B, zweiter Signalpin
-constexpr int kSdCsPin   = 1;    // Port B, erster Signalpin
+constexpr int kSdMisoPin = 2;    // Port B, Pin 3 (gelbe Ader)
+constexpr int kSdCsPin   = 1;    // Port B, Pin 4 (weisse Ader)
 ```
 
 ## Versorgungsspannung
@@ -151,6 +155,87 @@ if (!app.sdReady) app.sdReady = SD.begin(kSdCsPin, sdSpi, 1000000);
 
 Damit läuft auch ein Aufbau mit längeren Grove-Kabeln, nur eben langsamer. Der
 SD-Bus liegt auf **SPI3 (HSPI)**; SPI2 gehört dem Display.
+
+# Akkubetrieb und Ausschalten
+
+## Akku anschließen
+
+Der M5Dial hat eine Akkubuchse (JST 1,25 mm, 2-polig) für eine einzelne
+Li-Ion-/LiPo-Zelle (3,7 V nominal). Geladen wird über USB-C; die Ladeschaltung
+sitzt auf der Platine. Einen Ein-/Ausschalter braucht es nicht, denn der M5Dial
+schaltet sich selbst:
+
+| Signal | GPIO | Funktion |
+|---|---|---|
+| HOLD | 46 | Selbsthaltung. HIGH = bleibt an, LOW = trennt den Akku |
+| WAKE / Taste | 42 | Einschalten; im Betrieb die normale Taste (LOW = gedrückt) |
+
+`M5Dial.begin()` (M5Unified) setzt G46 gleich am Anfang auf HIGH. Laut M5Stack
+fließen im ausgeschalteten Zustand etwa **1,9 µA** bei 4,2 V.
+
+## Akkuspannung
+
+Die Spannung lässt sich **ohne Zusatzhardware nicht anzeigen**. Der M5Dial hat
+weder einen Spannungsteiler vom Akku auf einen ADC-Pin noch einen auslesbaren
+Lade-IC (dessen CHRG-/STDBY-Ausgänge sind nicht mit dem ESP32 verbunden).
+M5Unified kennt für den M5Dial keinen PMIC; `M5.Power.getBatteryLevel()` liefert
+deshalb **-2**. Die vier freien GPIOs sind zudem von der SD-Karte belegt.
+
+Nachrüsten ließe sich ein Fuel-Gauge-IC wie der **MAX17048** am internen
+I²C-Bus (G11/G12). Er hat die Adresse **0x36** und kollidiert damit weder mit
+Touch (0x38), RTC (0x51) noch RFID (0x28).
+
+## Drei Wege zum Ausschalten
+
+**Langer Druck auf „c64u Power Off".** In `handleButton()` wird der Punkt
+`kMenuPowerOff` im Ring-Menü gesondert behandelt: Die Taste muss
+`kDialOffHoldMs` (1,5 s) gehalten werden, dann folgt direkt
+`shutdownDevice()`. Das allgemeine Kurzzeichen nach 600 ms (zurück) entfällt auf
+diesem Symbol; wird früher losgelassen, läuft wie gewohnt `handleSelect()` mit
+der c64u-Abfrage. `handleTouch()` macht dasselbe, wenn die Berührung auf dem
+Symbol begann (`menuIndexFromTouch()`); das Touch-Kurzzeichen wird dort nicht
+ausgelöst.
+
+**Befehlskarte `CMD:M5OFF`** (auch `CMD:DIALOFF`): `CardCmd::DialOff` ruft
+ohne Nachfrage `shutdownDevice()` auf. In den ersten `kDialOffBootGuardMs`
+(8 s) nach dem Start wird die Karte ignoriert (*KARTE ABNEHMEN*), sonst würde
+eine aufliegende Karte das Gerät bei jedem Einschalten gleich wieder abschalten.
+In der Liste von *NFC-Cmd* steht der Befehl als *M5Dial Power Off*.
+
+**Einstellungen → „M5Dial Power Off".** Ab v1.3.0 steht er direkt unter *WLAN*. Wie *WLAN* wird er in `activateSetting()` vor der NFC-Prüfung
+behandelt und braucht deshalb keinen NFC-Leser.
+
+1. Erster Druck: `requestShutdown()` merkt sich die Anforderung und zeigt
+   *M5DIAL OFF? NOCHMAL!*; in der Liste steht *NOCHMAL*.
+2. Zweiter Druck innerhalb von `kShutdownAskMs` (3 s): `shutdownDevice()`.
+
+`shutdownDevice()` zeigt *AUS*, **wartet, bis die Taste losgelassen ist** (sie
+überbrückt sonst die Selbsthaltung), beendet SD und WLAN und zieht G46 auf LOW.
+Im Akkubetrieb ist das Gerät damit sofort aus.
+
+Hängt USB oder eine externe Quelle dran, läuft der ESP32 trotz HOLD = LOW
+weiter. Nach 1,5 s zeigt die Firmware deshalb kurz *USB: Schlaf*, schaltet das
+Display ab und geht in den Light-Sleep; geweckt wird per GPIO-Wakeup an G42
+(G42 ist kein RTC-Pin, Deep-Sleep-Wecken per ext0 geht dort nicht). Nach dem
+Wecken folgt `esp_restart()`. HOLD bleibt im Schlaf LOW: Wer das Kabel dann
+abzieht, hat den M5Dial ganz ausgeschaltet.
+
+Alternativ schaltet auch der **RST-Knopf** auf der Rückseite im Akkubetrieb aus,
+weil G46 während des Resets nicht mehr getrieben wird.
+
+## Ruhestrom und Standzeit
+
+Ausgeschaltet zieht der M5Dial laut Datenblatt rund 2 µA; die Schutzschaltung
+einer typischen Zelle kommt mit 1 bis 6 µA hinzu. Für einen 650-mAh-Akku sind
+das zusammen unter 0,1 mAh pro Monat – vernachlässigbar. Entscheidend ist die
+**Selbstentladung** der Zelle selbst (etwa 1 bis 3 % pro Monat). Voll geladen
+hält der Akku im ausgeschalteten Zustand also viele Monate; nach einem halben
+Jahr sollte er noch über 80 % haben.
+
+Voraussetzung: Das SD-Modul hängt an der 5-V-Leitung der Grove-Buchsen und ist
+damit mit ausgeschaltet. Einmal nachmessen lohnt sich: Multimeter in µA-/mA-
+Stellung in die Plusleitung des Akkus, M5Dial ausschalten – angezeigt werden
+sollten wenige µA.
 
 # Programmierumgebung
 
@@ -335,6 +420,12 @@ Die Hauptschleife `loop()` arbeitet bei ~30 fps (`kFrameMs = 33`):
 6. `render()` — Anzeige aufbauen und ausgeben
 
 ## Rendering auf dem runden Display
+
+**Verbindungsstatus im Ring-Menü.** `drawRoundFrame(withStatus, withDot)`
+zeichnet den Statuspunkt bei y = 14. Im Ring-Menü läge er genau unter dem
+Symbol *c64u Power Off*; `drawMainMenu()` ruft deshalb `drawRoundFrame(true,
+false)` auf und färbt stattdessen das Status-Symbol (`kMenuStatus`) mit
+`connectionColor()` – Zeichen immer, Rahmen nur, solange es nicht ausgewählt ist.
 
 Der StampS3 hat kein PSRAM. Ein Vollbildpuffer bei 240 × 240 × 2 Byte belegt
 115 kB und passt in den Heap; die Firmware legt ihn als `M5Canvas` an und schiebt
@@ -599,6 +690,7 @@ CMD:MENU
 CMD:POWEROFF=0      sofort ausschalten
 CMD:POWEROFF=8      nachfragen, 8 s Bestaetigungsfenster
 CMD:POWEROFF        nachfragen mit der Geraeteeinstellung "NFC-Cmd PowOff"
+CMD:M5OFF           den M5Dial selbst ausschalten (auch CMD:DIALOFF)
 CMD:CPU=10          CPU auf 10 MHz
 CMD:JOY             Joystickports umschalten (Normal <-> Swapped)
 CMD:JOY=SWAPPED     Ports fest setzen; auch NORMAL, WASD1, WASD2
@@ -769,10 +861,13 @@ der Statusseite und bei einem Druck auf ihr.
 
 Zwei getrennte Mechanismen:
 
-- **Menüpunkt PowerOff:** `requestPowerOff()` setzt `pendingPowerOff`; erst ein
+- **Menüpunkt c64u Power Off:** `requestPowerOff()` setzt `pendingPowerOff`; erst ein
   zweiter Druck innerhalb von *PowerOff Zeit* schaltet ab. Das gilt immer.
 - **Tastenkürzel PowerOff:** je nach *PowerOff Abfrage* entweder sofort oder mit
   Rückfrage (`comboPowerOff`), die mit einem weiteren Druck bestätigt wird.
+
+Der M5Dial selbst hat eine eigene Absicherung, siehe *Akkubetrieb und
+Ausschalten*: zweimal drücken in den Einstellungen, 1,5 s halten im Ring-Menü.
 
 # Persistenz
 
@@ -814,6 +909,7 @@ M5Dial-C64uRemote/
 | *SET build_env.h* beim Start | Zugangsdaten fehlen |
 | *KEIN NFC-LESER* | Serielle Ausgabe prüfen: `RFID (I2C 0x28) VersionReg = …`. `0x00`/`0xFF` heißt kein Kontakt zum internen Bus |
 | *KEINE SD-KARTE* | Verdrahtung, Versorgungsspannung des Moduls, FAT32, Kabellänge |
+| *KEINE SD-KARTE* nach Aufbau laut Doku bis v1.2.1 | An Port B gelbe und weiße Ader tauschen: gelb = MISO (G2), weiß = CS (G1) |
 | Statuspunkt gelb (*AUTH?*) | `C64U_TARGET_PASSWORD` stimmt nicht |
 | *Invalid type* beim Mounten | `type`/`mode` gehören in die Query, nicht als Multipart-Textfeld |
 | *LADEN ZU LANG* | Der Ladevorgang überschreitet 180 s; Image prüfen oder *Disk Action* auf *Mnt+Reset* stellen |

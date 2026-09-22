@@ -18,3 +18,6 @@ wifi.txt
 Infos-mad/
 .DS_Store
 *.vor-wlan-backup
+
+# Persoenlicher VS-Code-Arbeitsbereich (verweist auf die Nachbarordner)
+*.code-workspace

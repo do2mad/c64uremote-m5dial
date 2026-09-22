@@ -30,6 +30,7 @@ extended for the M5Dial by Martin Oswald (@mad, 1MHz.de).
 - A microSD module wired to Port A and Port B
   (installation is covered in the technical documentation)
 - A microSD card formatted as FAT32
+- For cordless use: a 3.7 V Li-ion/LiPo battery with a 1.25 mm plug
 - NFC tags: NTAG215 recommended, NTAG213/216 and MIFARE Classic also work
 
 Without an SD card every other function still works. The NFC reader is always
@@ -48,7 +49,9 @@ them into `build_env.h` as before (see the technical documentation). They then
 serve as the initial values for the very first start.
 
 Connection status is always visible as a small **dot at the very top** of the
-round display.
+round display. In the ring menu the *c64u Power Off* icon sits there, so the
+**Status icon (i)** carries the colour instead – the glyph itself and, while
+it is not selected, its frame as well.
 
 | Dot | Meaning |
 |---|---|
@@ -102,7 +105,7 @@ larger and brightly outlined; its name appears briefly above the logo.
 
 | Icon | What it does |
 |---|---|
-| **PowerOff** | Powers the C64 down – press twice for safety |
+| **c64u Power Off** | Powers the C64 down – press twice for safety. **Holding it (1.5 s)** switches the M5Dial off instead |
 | **Reset** | Resets the C64 (like the reset button) |
 | **Reboot** | Restarts the C64 completely |
 | **Ultimate Menu** | Opens or closes the Ultimate menu on the C64 |
@@ -113,9 +116,13 @@ larger and brightly outlined; its name appears briefly above the logo.
 | **Status** | Detailed connection information |
 | **Settings** | Preferences and NFC tools |
 
-**Powering off:** switching the machine off by accident would be annoying, so the
-prompt *POWER OFF? NOCHMAL!* appears first. Only a second press within the time
-window actually powers down.
+**Powering off the C64 (c64u Power Off):** switching the machine off by accident
+would be annoying, so the prompt *c64u OFF? AGAIN!* appears first. Only a second
+press within the time window actually powers down.
+
+**Switching the M5Dial off:** on the same icon, **hold** the button – or your
+finger on the icon – **for 1.5 seconds**. *OFF* appears; once you let go the
+M5Dial is off. Let go earlier and it stays the normal c64u Power Off with prompt.
 
 # Changing the CPU speed
 
@@ -211,8 +218,9 @@ Present it and the command runs immediately, with no menu and no SD card needed.
 | **Reset** | Resets the C64 |
 | **Reboot** | Restarts the C64 completely |
 | **Ultimate Menu** | Opens or closes the Ultimate menu |
-| **PowerOff direct** | Powers off immediately |
-| **PowerOff with prompt** | Asks first – present the same card a second time within the time window to confirm |
+| **c64u Off direct** | Powers the C64 off immediately |
+| **c64u Off with prompt** | Asks first – present the same card a second time within the time window to confirm |
+| **M5Dial Power Off** | Switches the M5Dial itself off |
 | **CPU x MHz** | Sets the CPU to the value stored on the card |
 | **Swap Joystick** | Swaps the joystick ports (Normal ↔ Swapped) |
 | **Joystick Normal / Swapped / WASD P1 / WASD P2** | Sets the port mapping to that fixed value |
@@ -229,7 +237,7 @@ Present it and the command runs immediately, with no menu and no SD card needed.
 
 The waiting time lives **on the card**, not in the device. When writing, the
 value comes from *NFC-Cmd PowOff* (3, 5, 8 or 15 seconds, 8 s by default).
-Presenting such a card shows *POWER OFF? NOCHMAL!* with a countdown. To power
+Presenting such a card shows *c64u OFF? AGAIN!* with a countdown. To power
 off:
 
 - present the **same card** again, or
@@ -237,6 +245,13 @@ off:
 
 If the countdown expires or a different card appears, nothing happens. A card
 with a time of **0** powers off immediately without asking.
+
+## Switching the M5Dial off by card
+
+A card holding `CMD:M5OFF` switches the **M5Dial itself** off – without a prompt,
+since presenting a card is already a deliberate act. So that a card still lying
+on the device at power-up does not switch it straight off again, it is ignored
+for the first eight seconds after start (*REMOVE CARD*).
 
 ## What is stored on the card
 
@@ -249,6 +264,7 @@ CMD:REBOOT
 CMD:MENU
 CMD:POWEROFF=0      power off immediately
 CMD:POWEROFF=8      ask first, 8 seconds to confirm
+CMD:M5OFF           switch the M5Dial itself off
 CMD:CPU=10          set the CPU to 10 MHz
 CMD:JOY             toggle the joystick ports
 CMD:JOY=SWAPPED     set the ports fixed; also NORMAL, WASD1, WASD2
@@ -386,6 +402,32 @@ networks found or by hand – and optionally the address and password of the C64
 After saving, the M5Dial shuts the access point down and connects to the new
 network. The browser connection breaking off in the process is normal.
 
+# Battery operation and switching off
+
+The M5Dial's battery connector (1.25 mm, 2-pin) takes a single 3.7 V Li-ion/LiPo
+cell. It is charged whenever the USB cable is plugged in.
+
+**Switching off** – three ways:
+
+- in the ring menu on *c64u Power Off*, **hold** the button or the icon for
+  **1.5 seconds**,
+- *Settings → M5Dial Power Off*, then press a second time within three seconds
+  (*M5DIAL OFF? AGAIN!*),
+- present a command card `CMD:M5OFF`.
+
+Once you release the button the M5Dial is off.
+**Switching on:** press the button.
+
+If the USB cable is plugged in, the device stays powered. It then briefly shows
+*USB: sleep*, turns the display off and sleeps until you press the button. Pull
+the cable while it sleeps and the M5Dial is off completely.
+
+The battery does not need a switch of its own. Switched off, the M5Dial only
+draws a few microamps; a full battery lasts many months that way. If you put the
+device away for longer than half a year, recharge it once in between.
+
+There is no battery voltage display: the M5Dial has no measuring line for it.
+
 # Settings at a glance
 
 Every setting is saved immediately and survives a restart.
@@ -402,6 +444,7 @@ Every setting is saved immediately and survives a restart.
 | **NFC-Cmd** | Create a command card (see the *Command cards* chapter) |
 | **NFC-Cmd PowOff** | Default prompt time for a PowerOff command card: 3, 5, 8, 15 s |
 | **WiFi** | Wi-Fi setup submenu (see the *Setting up Wi-Fi* chapter) |
+| **M5Dial Power Off** | Switches the M5Dial itself off - press twice (see the *Battery operation and switching off* chapter) |
 
 ## Operation
 
