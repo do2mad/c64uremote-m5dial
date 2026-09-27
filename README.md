@@ -266,6 +266,15 @@ sich Netz, Passwort und optional die c64u-Adresse eintragen; nach dem
 Speichern schaltet der M5Dial den Accesspoint ab und verbindet sich. Ohne
 Zugriff endet das Portal nach fünf Minuten von selbst.
 
+### Direktmodus (ohne Router)
+
+Für Treffen ohne WLAN: **Settings → WLAN → Direktmodus**. Der M5Dial spannt dann selbst
+das Netz `C64uRemote-Direct` (Passwort `c64ultimate`) auf und hat die Adresse
+`192.168.4.1`; der c64u bekommt per DHCP die `192.168.4.64`. Am c64u wird das
+Netz einmal eingetragen – er kann sich nur eines merken. *Direkt-Netz* schaltet
+auf `192.168.2.x` um. In der `wifi.txt` heißen die Zeilen `direct`, `direct_ssid`,
+`direct_pass` und `direct_net`. Einzelheiten stehen im Benutzerhandbuch, Kapitel *Direktmodus*.
+
 ---
 
 ## 4. Bedienung

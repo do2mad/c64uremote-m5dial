@@ -2,6 +2,149 @@
 
 C64uRemote für den **M5Dial**. Neueste Version zuerst.
 
+## v1.4.0 – 2026-09-27
+
+### Deutsch
+
+**Neu: Direktmodus – ohne Router, z. B. auf Treffen.** Der M5Dial spannt auf Wunsch
+selbst ein WLAN auf, und der c64u meldet sich direkt bei ihm an.
+
+- Neue Einträge im WLAN-Menü: **Direktmodus** (an/aus) und **Direkt-Netz**
+  (`192.168.4.x` oder `192.168.2.x`).
+- Netz `C64uRemote-Direct`, Passwort `c64ultimate`. Der M5Dial hat die `.1`, der
+  c64u bekommt per DHCP die `.64`. Eine eigene Seite zeigt, was am c64u
+  einzutragen ist, und ob er schon verbunden ist.
+- Meldet sich zuerst ein anderes Gerät an, sucht der M5Dial unter den angemeldeten
+  Geräten weiter, bis der c64u antwortet.
+- Ein zweiter Fernbediener kann sich als normaler Client ins Direktnetz
+  einbuchen und spricht den c64u dann automatisch unter der `.64` an; seine
+  Heimadresse bleibt erhalten.
+- Wer ein gespeichertes Netz wählt oder eine WLAN-Karte auflegt, beendet den
+  Direktmodus.
+- Befehlskarten `CMD:DIRECT=192.168.4`, `CMD:DIRECT=192.168.2` und
+  `CMD:DIRECT=OFF`, anzulegen unter *NFC-Cmd*.
+- Die `wifi.txt` kennt dafür die Zeilen `direct`, `direct_ssid`, `direct_pass`
+  und `direct_net`; *Auf SD sichern* schreibt sie mit heraus.
+
+**WLAN im Heimnetz deutlich zuverlässiger.**
+
+- Der eingebaute NFC-Leser hatte sein Funkfeld dauerhaft an und störte den
+  WLAN-Empfang des M5Dial: Abfragen an den c64u liefen immer wieder ins Leere
+  („connection refused“, „Target offline“), Spiele ließen sich nicht laden. Das
+  Feld ist jetzt nur noch für die kurze Kartenprobe und während der
+  Kartenbearbeitung an.
+- Anfragen an den c64u (Abfragen, Befehle, Uploads) laufen über einen eigenen,
+  schlanken HTTP-Weg: Verbindungsaufbau ohne blockierendes Warten, die Antwort
+  wird vollständig gelesen; bis zu drei Verbindungsversuche.
+- Netzname und Signalstärke werden höchstens einmal pro Sekunde beim
+  WLAN-Treiber abgefragt statt tausendfach.
+- Mesh-Netze (mehrere Zugangspunkte mit demselben Namen): Der M5Dial verbindet
+  sich mit dem stärksten Zugangspunkt und wechselt bei dauerhaft schwachem
+  Signal (unter −72 dBm) zu einem deutlich besseren.
+
+Diese Version enthält außerdem alles aus **v1.3.0** und **v1.3.1** (siehe unten) –
+beide sind nie als eigenes Release erschienen. Ab 1.4.0 tragen alle vier Geräte
+wieder dieselbe Versionsnummer.
+
+### English
+
+**New: direct mode – no router, e.g. at meetings.** On request the M5Dial opens a
+WiFi network of its own and the c64u connects to it directly.
+
+- New entries in the WiFi menu: **Direct mode** (on/off) and **Direct net**
+  (`192.168.4.x` or `192.168.2.x`).
+- Network `C64uRemote-Direct`, password `c64ultimate`. The M5Dial has `.1`, the
+  c64u gets `.64` via DHCP. A page of its own shows what to enter on the c64u
+  and whether it is connected yet.
+- If another device joins first, the M5Dial keeps looking among the connected
+  devices until the c64u answers.
+- A second remote can join the direct network as a normal client and then
+  addresses the c64u at `.64` automatically; its home address is kept.
+- Choosing a stored network or presenting a WiFi card ends direct mode.
+- Command cards `CMD:DIRECT=192.168.4`, `CMD:DIRECT=192.168.2` and
+  `CMD:DIRECT=OFF`, created under *NFC-Cmd*.
+- `wifi.txt` has the lines `direct`, `direct_ssid`, `direct_pass` and
+  `direct_net` for this; *Save to SD* writes them out as well.
+
+**WiFi on the home network much more reliable.**
+
+- The built-in NFC reader kept its RF field on permanently and disturbed the
+  M5Dial's WiFi reception: requests to the c64u kept going nowhere
+  ("connection refused", "Target offline"), games could not be loaded. The
+  field is now only on for the short card probe and while a card is being
+  processed.
+- Requests to the c64u (queries, commands, uploads) go through an own, lean
+  HTTP path: connecting without blocking waits, the reply is read completely;
+  up to three connection attempts.
+- Network name and signal strength are queried from the WiFi driver at most
+  once per second instead of thousands of times.
+- Mesh networks (several access points with the same name): the M5Dial
+  connects to the strongest access point and switches to a clearly better one
+  if the signal stays weak (below −72 dBm).
+
+This version also contains everything from **v1.3.0** and **v1.3.1** (see below) –
+neither was ever published as a release of its own. From 1.4.0 on, all four
+devices carry the same version number again.
+
+## v1.3.1 – 2026-09-25
+
+### Deutsch
+
+**Kein Einfrieren mehr, wenn der c64u nicht im Netz ist.** War der c64u aus
+oder unter der eingestellten Adresse nicht zu finden, blieb das Bild auf dem
+Startbild regelmäßig für rund zehn Sekunden stehen, und Drehknopf und Touch
+reagierten so lange nicht. Ursache: `HTTPClient` wartet beim Verbindungsaufbau
+von sich aus 5 s, und der Wiederholungsversuch aus v1.2.1 verdoppelte das. Die
+Statusabfrage lief alle 15 s – das Gerät stand also die meiste Zeit.
+
+- Der Verbindungsaufbau hat jetzt eine eigene Frist von 1 s
+  (`kHttpConnectTimeoutMs`). Im Heimnetz antwortet der c64u in wenigen
+  Millisekunden.
+- Wiederholt wird nur noch ein *schnell* abgewiesener Aufruf (TCP-RST), nicht
+  ein abgelaufener – dann ist schlicht niemand da.
+- Gilt der c64u als nicht erreichbar, klopft die regelmäßige Statusabfrage
+  zuerst mit einem nicht blockierenden TCP-Aufbau an. Die Anzeige läuft dabei
+  ungebremst weiter; erst wenn sich der c64u meldet, folgt die HTTP-Abfrage.
+- Der CPU-Takt wird erst nachgeladen, wenn der c64u erreichbar ist. Bisher blieb
+  nach einem Start ohne c64u die Fehlermeldung stehen, auch wenn er später kam.
+
+**Animationen ab Werk aus.** Das Startbild zeigt nach dem ersten Start bzw.
+nach *Factory Reset* das ruhige Logo; die Effekte lassen sich unter *Settings →
+Animations* einschalten. Bestehende Geräte behalten ihre gespeicherte Einstellung.
+
+**Versionsnummer auf der Statusseite.** Ganz unten steht jetzt *Version* mit
+Nummer und Datum, z. B. `1.3.1 (2026-09-25)`; dieselbe Angabe erscheint im
+Startprotokoll auf der seriellen Konsole. Gepflegt wird sie über `kFwVersion`
+und `kFwDate` am Anfang von `main.cpp`.
+
+### English
+
+**No more freezing when the c64u is not on the network.** With the c64u
+switched off or not found at the configured address, the home screen regularly
+froze for about ten seconds, and dial and touch did not respond meanwhile.
+Cause: `HTTPClient` waits 5 s for the connection by default, and the retry from
+v1.2.1 doubled that. The status query ran every 15 s - so the device was stuck
+most of the time.
+
+- Connection setup now has its own limit of 1 s (`kHttpConnectTimeoutMs`). On a
+  home network the c64u answers within a few milliseconds.
+- Only a *quickly* refused call (TCP RST) is retried, no longer one that timed
+  out - then there is simply nobody there.
+- While the c64u counts as unreachable, the periodic status query first knocks
+  with a non-blocking TCP connect. The display keeps running smoothly; only once
+  the c64u answers does the HTTP query follow.
+- The CPU speed is only loaded once the c64u is reachable. Previously, after a
+  start without the c64u, the error message stayed even when it showed up later.
+
+**Animations off by default.** After the first start or a *Factory Reset* the
+home screen shows the static logo; the effects can be switched on under
+*Settings → Animations*. Existing devices keep their stored setting.
+
+**Version number on the status page.** At the very bottom there is now
+*Version* with number and date, e.g. `1.3.1 (2026-09-25)`; the same appears in
+the boot log on the serial console. It is maintained via `kFwVersion` and
+`kFwDate` at the top of `main.cpp`.
+
 ## v1.3.0 – 2026-09-22
 
 ### Deutsch

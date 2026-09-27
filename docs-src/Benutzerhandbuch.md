@@ -114,7 +114,7 @@ Symbol ist größer und hell umrandet; sein Name erscheint kurz über dem Logo.
 | **RFID / NFC** | Karte auflegen und das gespeicherte Spiel starten |
 | **SD-Karte** | Ein Spiel direkt von der SD-Karte auswählen und starten |
 | **Joystick Swap** | Vertauscht die Joystickports am C64 (Normal ↔ Swapped) |
-| **Status** | Ausführliche Verbindungsinfos |
+| **Status** | Ausführliche Verbindungsinfos, ganz unten die Firmware-Version |
 | **Settings** | Einstellungen und NFC-Werkzeuge |
 
 **C64 ausschalten (c64u Power Off):** Aus Versehen ausschalten wäre ärgerlich,
@@ -256,7 +256,8 @@ mit der Zeit **0** schaltet ohne Nachfrage sofort aus.
 Eine Karte mit `CMD:M5OFF` schaltet den **M5Dial selbst** aus – ohne Nachfrage,
 weil das Auflegen schon eine bewusste Handlung ist. Damit eine Karte, die beim
 Einschalten noch aufliegt, das Gerät nicht gleich wieder abschaltet, wird sie in
-den ersten acht Sekunden nach dem Start ignoriert (*KARTE ABNEHMEN*).
+den ersten acht Sekunden nach dem Start ignoriert (*KARTE ABNEHMEN*). Dieselbe Karte
+schaltet auch einen Core, CoreS3 oder Stick aus.
 
 ## Was auf der Karte steht
 
@@ -273,6 +274,8 @@ CMD:M5OFF           den M5Dial selbst ausschalten
 CMD:CPU=10          CPU auf 10 MHz
 CMD:JOY             Joystickports umschalten
 CMD:JOY=SWAPPED     Ports fest setzen; auch NORMAL, WASD1, WASD2
+CMD:DIRECT=192.168.4  Direktmodus mit diesem Netz einschalten
+CMD:DIRECT=OFF      Direktmodus aus, zurück ins gespeicherte WLAN
 ```
 
 Groß- und Kleinschreibung sind egal. Dasselbe Format verstehen die M5Dial- und
@@ -333,6 +336,8 @@ wenn du zwischen Zuhause und einem Handy-Hotspot wechselst.
 
 | Eintrag | Wirkung |
 |---|---|
+| **Direktmodus** | Eigenes WLAN ohne Router, der c64u meldet sich direkt an (siehe Kapitel *Direktmodus*) |
+| **Direkt-Netz** | Adressbereich des Direktnetzes: `192.168.4.x` oder `192.168.2.x` |
 | **Netz suchen** | Umgebung durchsuchen und ein Netz aus der Liste wählen |
 | **Von SD laden** | `wifi.txt` von der microSD einlesen |
 | **Setup-Portal** | Eigener Accesspoint mit Weboberfläche |
@@ -410,6 +415,93 @@ gefundenen Netze oder von Hand – und optional Adresse und Passwort des C64.
 Nach dem Speichern schaltet der M5Dial den Accesspoint ab und verbindet sich
 mit dem neuen Netz. Dass die Browserverbindung dabei abbricht, ist normal.
 
+# Direktmodus: ohne Router, z. B. auf Treffen
+
+Auf einem Treffen gibt es oft kein WLAN – oder eines, in das man den c64u
+nicht hängen will. Für diesen Fall spannt der M5Dial selbst ein kleines WLAN
+auf, und der c64u meldet sich direkt bei ihm an. Ein Router ist nicht nötig.
+
+| | |
+|---|---|
+| **Netzname (SSID)** | `C64uRemote-Direct` |
+| **Passwort** | `c64ultimate` |
+| **M5Dial** | `192.168.4.1` |
+| **c64u** | `192.168.4.64` |
+
+## Einmal am c64u
+
+Der c64u kann sich nur **ein** WLAN merken. Trage dort im Ultimate-Menü unter
+den Netzwerk-/WLAN-Einstellungen Netzname und Passwort des Direktnetzes ein
+und lass die Adressvergabe auf **DHCP** stehen. Zurück zu Hause trägst du am
+c64u wieder dein Heimnetz ein.
+
+## Am M5Dial
+
+Unter **Settings → WLAN** *Direktmodus* wählen. Der M5Dial schaltet sein normales WLAN ab,
+startet das Direktnetz und zeigt eine Seite mit allem, was der c64u braucht:
+Netzname, Passwort, die Adresse des c64u und den Stand der Verbindung
+(*warte auf den c64u*, *c64u verbunden*).
+
+Sobald sich der c64u anmeldet, bekommt er die Adresse `192.168.4.64` und der
+M5Dial prüft sofort, ob er antwortet. Danach funktioniert alles wie gewohnt.
+Die eingestellte Heimadresse des c64u bleibt dabei unangetastet.
+
+Meldet sich zuerst ein anderes Gerät an (etwa ein Handy), bekommt es die
+`.64` und der c64u die nächste Adresse. Das ist kein Problem: Der M5Dial probiert
+dann die angemeldeten Geräte der Reihe nach durch, bis sich der c64u meldet.
+Die gefundene Adresse steht auf der Direktmodus-Seite und in der Statusanzeige.
+
+Der Direktmodus bleibt auch nach dem Ausschalten eingestellt – der M5Dial startet
+dann gleich wieder mit dem Direktnetz.
+
+**Ausschalten:** Auf der Direktmodus-Seite die **Taste drücken**. Ein Tipper auf den Bildschirm führt nur zurück ins WLAN-Menü, der Direktmodus läuft dabei weiter. Der M5Dial verbindet sich danach wieder mit dem
+gespeicherten WLAN. Das passiert auch, wenn du unter *Gespeichert* ein Netz
+wählst oder eine WLAN-Karte auflegst.
+
+## Adressbereich
+
+*Direkt-Netz* schaltet zwischen `192.168.4.x` und `192.168.2.x` um. Der
+M5Dial hat immer die `.1`, der c64u die `.64`. Läuft der Direktmodus gerade,
+startet das Netz sofort neu; der c64u meldet sich von selbst wieder an.
+
+Für andere Werte gibt es in der `wifi.txt` auf der SD-Karte eigene Zeilen:
+
+```
+direct      = an                  an / aus
+direct_ssid = C64uRemote-Direct
+direct_pass = c64ultimate         mindestens acht Zeichen
+direct_net  = 192.168.4           M5Dial = .1, c64u = .64
+```
+
+*Auf SD sichern* schreibt diese Zeilen mit heraus.
+
+## Per Karte ein- und ausschalten
+
+Unter *NFC-Cmd* stehen drei Befehlskarten für den Direktmodus: zuerst das
+gerade eingestellte Netz, dann das andere (`192.168.4.x` bzw. `192.168.2.x`),
+zuletzt *Direktmodus aus*. Auf der Karte steht dann `CMD:DIRECT=192.168.4`,
+`CMD:DIRECT=192.168.2` oder `CMD:DIRECT=OFF`. Auflegen schaltet sofort um;
+läuft der Direktmodus schon mit diesem Netz, passiert nichts – die Karte darf
+also liegen bleiben.
+
+## Weitere Geräte im Direktnetz
+
+- **Ein Handy oder Notebook** kann sich ebenfalls ins Direktnetz einbuchen. Die
+  Weboberfläche des c64u erreichst du dann unter `http://192.168.4.64`.
+- **Ein zweiter M5-Fernbediener** meldet sich wie in jedes andere WLAN an, am
+  einfachsten mit einer WLAN-Karte
+  `WIFI:S:C64uRemote-Direct;T:WPA;P:c64ultimate;;`. Erkennt er das Direktnetz,
+  spricht er den c64u automatisch unter der `.64` an – seine Heimadresse bleibt
+  gespeichert. Den Direktmodus schaltet immer nur **ein** Gerät ein.
+
+## Gut zu wissen
+
+- Das Direktnetz braucht etwas mehr Strom als der normale WLAN-Betrieb, weil der
+  Funk dauerhaft an sein muss.
+- Für einen Tisch reicht die Reichweite gut, quer durch einen Saal eher nicht.
+- *Netz suchen* funktioniert auch im Direktmodus. Während der Suche kann der
+  c64u kurz den Kontakt verlieren; er meldet sich danach von selbst wieder an.
+
 # Akkubetrieb und Ausschalten
 
 An die Akkubuchse des M5Dial (1,25 mm, 2-polig) passt ein einzelner
@@ -476,7 +568,7 @@ Reagiert das Menü beim Drehen zu hektisch, stelle *Encoder Steps* höher.
 
 | Eintrag | Bedeutung |
 |---|---|
-| **Animations** | Effekte auf dem Startbild ein- oder ausschalten |
+| **Animations** | Effekte auf dem Startbild ein- oder ausschalten (ab Werk *Off*) |
 | **Effect** | *Auto* wechselt durch alle, sonst fest einer |
 | **Anim Speed** | Tempo der Effekte |
 | **Effect Time** | Wie lange ein Effekt läuft |
@@ -506,6 +598,24 @@ refused"), obwohl Netz und Adresse in Ordnung sind – das passiert auch dann,
 wenn nur ein einziges Gerät im Netz hängt. Seit v1.2.1 wiederholt die Firmware
 einen abgewiesenen Aufruf nach kurzer Pause von selbst, du merkst davon also
 meist nichts mehr. Bleibt es dauerhaft dabei, hilft ein Neustart des c64u.
+
+**Der c64u fällt immer wieder aus, obwohl der M5Dial guten Empfang hat.**
+Seit v1.4.0 sollte das nicht mehr vorkommen: Die Verbindung zum c64u wurde
+gründlich überarbeitet (siehe CHANGELOG), und der c64u läuft per WLAN genauso
+zuverlässig wie per LAN-Kabel. Ursache war vor allem das dauerhaft
+eingeschaltete Funkfeld des NFC-Lesers, das den WLAN-Empfang des M5Dial gestört
+hat. Für Treffen ohne Router ist der Direktmodus da; dort hängt
+der c64u direkt am M5Dial.
+Ist der c64u nach vielen Netzwechseln gar nicht mehr zu erreichen, obwohl sein
+Menü eine Verbindung zeigt: kurz vom Strom trennen. Aus- und Einschalten per
+Taste hat in diesem Fall nicht gereicht.
+
+**Ist der c64u aus, hakt dann die Anzeige?**
+Seit v1.3.1 nicht mehr. Vorher blieb das Startbild alle paar Sekunden für eine
+Weile stehen, solange der c64u nicht im Netz war. Jetzt fragt der M5Dial im
+Hintergrund nach und zeigt *Not reached*, bis der c64u wieder da ist. Tipp: Trag
+den c64u mit seiner IP-Adresse ein, nicht mit einem Namen – nur dann läuft die
+Suche ganz ohne Unterbrechung.
 
 **Der Touch reagiert manchmal nicht.**
 Der gesamte äußere Ring ist aktiv, du musst die Symbole also nicht genau treffen.

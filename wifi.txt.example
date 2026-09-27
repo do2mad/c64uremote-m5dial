@@ -25,3 +25,13 @@ pass = geheim123
 # Leer lassen heisst: es bleibt beim bisherigen Wert.
 host     = 192.168.0.64
 hostpass =
+
+# Direktmodus (optional): der M5Dial spannt selbst ein WLAN auf, der c64u meldet
+# sich dort an - fuer Treffen ohne Router. Am c64u einmal SSID und Passwort
+# dieses Netzes eintragen; er bekommt dann die Adresse <direct_net>.64.
+# Zum Einschalten die Raute vor den Zeilen entfernen. Fehlt eine Zeile, bleibt
+# der bisherige Wert.
+#direct      = an
+#direct_ssid = C64uRemote-Direct
+#direct_pass = c64ultimate
+#direct_net  = 192.168.4
