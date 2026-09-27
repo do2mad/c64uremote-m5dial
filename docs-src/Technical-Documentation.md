@@ -636,11 +636,14 @@ The MFRC522 driver leaves the 13.56 MHz field on permanently after `PCD_Init()`.
 `rfidFieldOn()` and `rfidFieldOff()` switch it on only for the card probe
 (`cardPresent()`, `cardPresentQuick()`, then 5 ms for the card to power up) and
 while a detected card is being processed; on an empty probe it goes off again.
-After `processCard()`, however, it stays on until the card is gone
-(`rfidHoldCard()`, `rfidHeldCardGone()`): the processed card has been put to
-sleep with HLTA and no longer answers REQA; whether it is still there is checked
-with WUPA. Switching the field off and on would wake the card up fresh and it
-would be executed or written again. On the M5Dial the NFC antenna sits right next to
+It is also switched off before every network request (`rawOpen()`, `probeStart()`) -
+according to M5Stack the M5Dial's RFID and WiFi share the antenna, and WiFi is
+blocked while the field is on. So that a card left on the reader is not
+executed or written again every time the field comes on, `rfidHoldCard()`
+remembers its UID after `processCard()`. `rfidHeldCardGone()` switches the
+field on briefly on every check, reads the UID and switches off again right
+away; the same card is ignored, only two misses in a row or a different card
+clear the way. On the M5Dial the NFC antenna sits right next to
 the WiFi antenna: with the field permanently on and the background check running,
 packets to the M5Dial kept getting lost for seconds, queries and uploads failed.
 

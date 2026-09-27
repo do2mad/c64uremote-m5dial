@@ -1393,7 +1393,10 @@ String extractDigits(const String& value) {
 constexpr size_t kRawMaxBody = 16384;
 
 // Baut die Verbindung auf. 0 = steht, sonst HTTPC_ERROR_CONNECTION_REFUSED.
+void rfidFieldOff();
+
 int rawOpen(uint32_t connectMs, int* fdOut) {
+  rfidFieldOff();   // WLAN braucht die Antenne (siehe rfidHoldCard)
   IPAddress ip;
   if (!ip.fromString(targetHost()) && !WiFi.hostByName(targetHost().c_str(), ip)) {
     return HTTPC_ERROR_CONNECTION_REFUSED;
@@ -2071,6 +2074,7 @@ void probeAbort() {
 
 ProbeState probeStart(uint32_t now) {
   probeAbort();
+  rfidFieldOff();   // WLAN braucht die Antenne (siehe rfidHoldCard)
   // Nur mit einer reinen IP-Adresse. Ein Hostname braeuchte eine (blockierende)
   // Namensaufloesung - dann lieber wie bisher direkt per HTTP fragen.
   IPAddress ip;
@@ -3965,40 +3969,44 @@ bool cardPresentQuick() {
 // ---------------------------------------------------------------------------
 // Bearbeitete Karte festhalten
 //
-// Nach processCard() ist die Karte per HLTA schlafen gelegt. Bei dauerhaft
-// eingeschaltetem Feld meldet sie sich auf REQA nicht mehr - sie wird also
-// nicht ein zweites Mal ausgefuehrt oder beschrieben, solange sie aufliegt.
-// Schaltet man das Feld dagegen aus und wieder ein, wacht sie frisch auf und
-// gilt als neue Karte: Dann piepte es im Sekundentakt, die Karte wurde immer
-// wieder neu beschrieben, und wer sie waehrenddessen abzog, bekam einen
-// Schreibfehler. Deshalb bleibt das Feld nach einer bearbeiteten Karte an, bis
-// sie weg ist. Ob sie noch aufliegt, klaert WUPA, das auch eine schlafende
-// Karte weckt; sie wird sofort wieder schlafen gelegt.
+// Eine Karte soll nur einmal ausgefuehrt bzw. beschrieben werden, solange sie
+// aufliegt. Das Funkfeld soll aber trotzdem aus sein: Laut M5Stack teilen sich
+// beim M5Dial RFID und WLAN die Antenne, und das WLAN ist blockiert, solange
+// das RFID-Feld an ist. Nach dem Ausschalten wacht eine liegen gebliebene
+// Karte beim naechsten Einschalten frisch auf - deshalb merkt sich die
+// Firmware ihre UID. Bei jeder Abfrage geht das Feld kurz an; meldet sich
+// dieselbe Karte, passiert nichts und das Feld geht sofort wieder aus. Erst
+// wenn sie zweimal in Folge fehlt oder eine andere Karte aufliegt, ist der
+// Weg fuer die naechste frei.
 // ---------------------------------------------------------------------------
-void rfidHoldCard() {
-  rfidRelease();   // HLTA + Crypto aus / HLTA + crypto off
-  gRfidHold = true;
-}
-
 uint8_t gRfidHoldMisses = 0;
+String  gRfidHoldUid;
+String  cardUidString();
+
+void rfidHoldCard() {
+  gRfidHoldUid    = cardUidString();
+  rfidRelease();   // HLTA + Crypto aus / HLTA + crypto off
+  rfidFieldOff();
+  gRfidHold       = true;
+  gRfidHoldMisses = 0;
+}
 
 bool rfidHeldCardGone() {
   if (!gRfidHold) return true;
+  rfidFieldOn();
   setRfidTimerReload(kRfidProbeReload);
-  uint8_t atqa[2];
-  uint8_t size = sizeof(atqa);
-  const bool there = RFID.PICC_WakeupA(atqa, &size) == MFRC522::STATUS_OK;
+  const bool present = RFID.PICC_IsNewCardPresent();
   setRfidTimerReload(gRfidTimerReload);
-  if (there) {
-    RFID.PICC_HaltA();
+  const bool same = present && RFID.PICC_ReadCardSerial() && cardUidString() == gRfidHoldUid;
+  rfidFieldOff();
+  if (same) {
     gRfidHoldMisses = 0;
     return false;
   }
   // Erst nach zwei Fehlanzeigen in Folge gilt die Karte als weg.
-  if (++gRfidHoldMisses < 2) return false;
+  if (!present && ++gRfidHoldMisses < 2) return false;
   gRfidHoldMisses = 0;
-  gRfidHold = false;
-  rfidFieldOff();
+  gRfidHold       = false;
   return true;
 }
 

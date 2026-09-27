@@ -645,11 +645,15 @@ Der MFRC522-Treiber lässt das 13,56-MHz-Feld nach `PCD_Init()` dauerhaft an.
 `rfidFieldOn()` und `rfidFieldOff()` schalten es nur für die Kartenprobe
 (`cardPresent()`, `cardPresentQuick()`, danach 5 ms Anlaufzeit für die Karte)
 und für die Bearbeitung einer erkannten Karte ein; bei einer leeren Probe geht
-es wieder aus. Nach `processCard()` bleibt es dagegen an, bis die Karte weg ist
-(`rfidHoldCard()`, `rfidHeldCardGone()`): Die bearbeitete Karte ist per HLTA
-schlafen gelegt und meldet sich auf REQA nicht mehr; ob sie noch aufliegt, prüft
-WUPA. Würde das Feld aus- und wieder eingeschaltet, wachte die Karte frisch auf
-und würde erneut ausgeführt bzw. beschrieben. Beim M5Dial liegt die NFC-Antenne
+es wieder aus. Vor jeder Netzwerkanfrage (`rawOpen()`, `probeStart()`) wird es
+ebenfalls abgeschaltet – laut M5Stack teilen sich beim M5Dial RFID und WLAN die
+Antenne, und das WLAN ist blockiert, solange das Feld an ist. Damit eine
+liegen gebliebene Karte nicht bei jedem Einschalten des Feldes erneut
+ausgeführt bzw. beschrieben wird, merkt sich `rfidHoldCard()` nach
+`processCard()` ihre UID. `rfidHeldCardGone()` schaltet bei jeder Abfrage das
+Feld kurz ein, liest die UID und schaltet sofort wieder ab; dieselbe Karte wird
+ignoriert, erst zwei Fehlanzeigen in Folge oder eine andere Karte geben den Weg
+frei. Beim M5Dial liegt die NFC-Antenne
 direkt neben der WLAN-Antenne: Mit dauerhaft eingeschaltetem Feld und laufender
 Hintergrundabfrage gingen Pakete an den M5Dial immer wieder sekundenlang
 verloren, Abfragen und Uploads scheiterten.
