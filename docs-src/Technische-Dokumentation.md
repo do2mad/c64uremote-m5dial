@@ -463,6 +463,17 @@ Unbrauchbare Werte (SSID leer oder > 32 Zeichen, Passwort < 8 oder > 63,
 Adressbereich nicht drei Zahlen 0…255) werden beim Laden durch die Vorgaben
 ersetzt.
 
+### Netznummer (seit v1.5.0)
+
+Mehrere Geräte im Direktmodus an einem Tisch brauchen verschiedene Netznamen.
+Die Nummer steckt allein im Netznamen `gDirectSsid` (NVS `dssid`):
+`directNumFromSsid()` liefert 0 für `C64uRemote-Direct`, 1–9 für
+`C64uRemote-Direct-1` … `-9` und −1 für einen frei gesetzten Namen.
+`directChannel()` wählt daraus den Funkkanal für `WiFi.softAP()`: ohne Nummer
+wie bisher `kDirectChannel` (6), sonst reihum 1, 6, 11. Der Menüpunkt
+*Direkt-Nr.* (`kWifiDirectNum`) schaltet über `setDirectNum()` 0 → 1 … 9 → 0,
+speichert und startet einen laufenden Accesspoint neu.
+
 # Softwarearchitektur
 
 ## Zustandsmodell

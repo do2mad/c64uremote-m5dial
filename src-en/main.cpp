@@ -87,8 +87,8 @@ namespace {
 // Firmware version. Keep it up to date with every release - it is shown on
 // the status page and in the boot log and belongs to the CHANGELOG entry.
 // ---------------------------------------------------------------------------
-constexpr const char* kFwVersion = "1.4.0";
-constexpr const char* kFwDate    = "2026-09-27";
+constexpr const char* kFwVersion = "1.5.0";
+constexpr const char* kFwDate    = "2026-10-18";
 
 // ---------------------------------------------------------------------------
 // Network diagnostics on the serial console (115200 baud). Logs every HTTP
@@ -333,6 +333,7 @@ static_assert(kSettingsCount == static_cast<size_t>(kSetItemCount),
 enum WifiMenuId : uint8_t {
   kWifiDirect = 0,     // direct mode on/off (own access point)
   kWifiDirectNet,      // address range of the direct network
+  kWifiDirectNum,      // number of the direct network (several devices at one table)
   kWifiScanNow,
   kWifiFromSd,
   kWifiPortal,
@@ -347,6 +348,7 @@ enum WifiMenuId : uint8_t {
 constexpr const char* kWifiMenuItems[kWifiMenuCount] = {
     "Direct mode",
     "Direct net",
+    "Direct no.",
     "Scan networks",
     "Load from SD",
     "Setup portal",
@@ -1793,6 +1795,30 @@ bool gWifiNoted = false;
 // Like the setup portal, without a station part: an active STA would search
 // for the home network in the background, change channel and keep
 // throwing the c64u off the network.
+// Number of the direct network. Several devices in direct mode at one table
+// need different network names, otherwise a c64u may join the wrong one:
+// "C64uRemote-Direct-1" to "-9". Without a number the old name stays. The
+// number lives only in the network name (gDirectSsid); a name set freely via
+// /wifi.txt counts as "custom" (-1).
+int directNumFromSsid(const String& ssid) {
+  if (ssid == kDirectSsidDef) return 0;
+  const String prefix = String(kDirectSsidDef) + "-";
+  if (ssid.length() == prefix.length() + 1 && ssid.startsWith(prefix)) {
+    const char c = ssid[ssid.length() - 1];
+    if (c >= '1' && c <= '9') return c - '0';
+  }
+  return -1;
+}
+
+// Radio channel: without a number 6 as before, with a number 1, 6, 11 in turn -
+// the three channels in the 2.4 GHz band that do not overlap.
+uint8_t directChannel() {
+  const int num = directNumFromSsid(gDirectSsid);
+  if (num <= 0) return kDirectChannel;
+  static const uint8_t kChannels[3] = {1, 6, 11};
+  return kChannels[(num - 1) % 3];
+}
+
 void startDirectAp(uint32_t now) {
   app.lastWiFiAttemptMs = now;
   if (app.portalActive) return;          // portal has priority, continues here afterwards
@@ -1811,7 +1837,7 @@ void startDirectAp(uint32_t now) {
   // Start the AP first, then set the addresses. The other way round, depending
   // on the core version, the default 192.168.4.1 stays - the setup portal never
   // notices because it uses exactly this address.
-  gDirectApUp = WiFi.softAP(gDirectSsid.c_str(), gDirectPass.c_str(), kDirectChannel,
+  gDirectApUp = WiFi.softAP(gDirectSsid.c_str(), gDirectPass.c_str(), directChannel(),
                             0 /*sichtbar*/, kDirectMaxClients);
   delay(100);
   // The DHCP server hands out from <net>.64 - first come gets .64.
@@ -3036,6 +3062,18 @@ void setDirectMode(bool on, uint32_t now, bool reconnect = true) {
 void setDirectNet(const String& net, uint32_t now) {
   if (!directNetValid(net) || net == gDirectNet) return;
   gDirectNet = net;
+  saveNetConfig();
+  resetDirectState();
+  if (gDirectMode && !app.portalActive) {
+    stopDirectAp();
+    startDirectAp(now);
+  }
+}
+
+// New network number (0 = without number). If direct mode is running, the AP
+// restarts with the new name and channel right away.
+void setDirectNum(int num, uint32_t now) {
+  gDirectSsid = num <= 0 ? String(kDirectSsidDef) : String(kDirectSsidDef) + "-" + String(num);
   saveNetConfig();
   resetDirectState();
   if (gDirectMode && !app.portalActive) {
@@ -5508,6 +5546,10 @@ String wifiMenuValue(size_t index) {
   switch (index) {
     case kWifiDirect:       return gDirectMode ? "on" : "off";
     case kWifiDirectNet:    return gDirectNet;
+    case kWifiDirectNum: {
+      const int num = directNumFromSsid(gDirectSsid);
+      return num < 0 ? String("custom") : num == 0 ? String("-") : String(num);
+    }
     case kWifiScanNow:
       return app.wifiScanCount == 0 ? String("scan")
                                     : String(static_cast<unsigned>(app.wifiScanCount));
@@ -6095,6 +6137,14 @@ void wifiMenuSelect(uint32_t now) {
       setDirectNet(gDirectNet == kDirectNetDef ? String(kDirectNetAlt) : String(kDirectNetDef), now);
       setModal(String("NET ") + gDirectNet + ".x", kColInfo, now, 1800);
       break;
+
+    case kWifiDirectNum: {
+      // 0 (without number), 1 ... 9, then 0 again
+      const int num = directNumFromSsid(gDirectSsid);
+      setDirectNum(num < 0 ? 1 : (num + 1) % 10, now);
+      setModal(gDirectSsid, kColInfo, now, 1800);
+      break;
+    }
 
     case kWifiScanNow:
       wifiStartScan(now);

@@ -38,6 +38,18 @@ present, but without an SD card it has nothing to launch.
 
 # First-time setup
 
+## Installing the firmware – without a development environment
+
+The ready-made firmware can be installed straight from the browser, with no VS
+Code or PlatformIO: open **https://1mhz.de/M5-webflash/** in **Chrome** or **Edge** on a computer
+(Safari and Firefox cannot do USB), connect the M5Dial with a USB **data** cable,
+pick device and language and click *Install*. The same page also
+installs every later update.
+
+The firmware from the page contains no credentials. Set up WiFi and the c64u
+address on the device afterwards as described below. If the connection fails,
+the hints on the page will help.
+
 For the M5Dial to find your C64, the Wi-Fi credentials and the address of the C64
 have to be stored once. You can do that **right on the device** under
 *Settings → WiFi* – the source code no longer has to be touched. The credentials
@@ -465,6 +477,21 @@ direct_net  = 192.168.4           M5Dial = .1, c64u = .64
 ```
 
 *Save to SD* writes these lines out as well.
+
+## Several devices at one table
+
+If two remotes open a direct network at the same time, they need different
+network names – otherwise a c64u may join the wrong device. That is what
+*Direct no.* in the WiFi menu is for: every press steps from *-* (no number,
+`C64uRemote-Direct`) through `C64uRemote-Direct-1` to `-9` and back again. Each
+number also uses its own radio channel (1, 6 or 11) so the networks do not
+disturb each other.
+
+On the c64u you enter exactly this network name – the direct mode page shows
+it. If direct mode is running, the network restarts with the new name right
+away. A name with a number in `wifi.txt` (`direct_ssid = C64uRemote-Direct-2`)
+works the same way; a completely custom name shows as *custom* and runs on
+channel 6.
 
 ## Switching by card
 

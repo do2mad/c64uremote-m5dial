@@ -458,6 +458,17 @@ NVS (namespace `c64unet`): `dmode` (bool), `dssid`, `dpass`, `dnet`. Unusable
 values (SSID empty or > 32 characters, password < 8 or > 63, address range not
 three numbers 0…255) are replaced by the defaults on load.
 
+### Network number (since v1.5.0)
+
+Several devices in direct mode at one table need different network names. The
+number lives solely in the network name `gDirectSsid` (NVS `dssid`):
+`directNumFromSsid()` returns 0 for `C64uRemote-Direct`, 1–9 for
+`C64uRemote-Direct-1` … `-9` and −1 for a freely set name. `directChannel()`
+picks the radio channel for `WiFi.softAP()` from it: without a number
+`kDirectChannel` (6) as before, otherwise 1, 6, 11 in turn. The menu entry
+*Direct no.* (`kWifiDirectNum`) steps 0 → 1 … 9 → 0 via `setDirectNum()`, saves
+and restarts a running access point.
+
 # Software architecture
 
 ## State model

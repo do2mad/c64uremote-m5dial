@@ -31,6 +31,9 @@ hostpass =
 # dieses Netzes eintragen; er bekommt dann die Adresse <direct_net>.64.
 # Zum Einschalten die Raute vor den Zeilen entfernen. Fehlt eine Zeile, bleibt
 # der bisherige Wert.
+# Mehrere Geraete an einem Tisch: jedes bekommt eine eigene Nummer,
+# z. B. direct_ssid = C64uRemote-Direct-1 ... C64uRemote-Direct-9
+# (dasselbe wie "Direkt-Nr." im WLAN-Menue, eigener Funkkanal je Nummer).
 #direct      = an
 #direct_ssid = C64uRemote-Direct
 #direct_pass = c64ultimate

@@ -38,6 +38,18 @@ immer vorhanden, ohne SD-Karte kann er aber nichts starten.
 
 # Erste Einrichtung
 
+## Firmware aufspielen – ohne Programmierumgebung
+
+Die fertige Firmware lässt sich direkt im Browser aufspielen, ganz ohne VS Code
+und PlatformIO: **https://1mhz.de/M5-webflash/** in **Chrome** oder **Edge** am Computer öffnen
+(Safari und Firefox können kein USB), den M5Dial per USB-**Daten**kabel anschließen,
+Gerät und Sprache wählen und auf *Installieren* klicken. Dieselbe Seite
+spielt später auch jedes Update auf.
+
+Die Firmware von der Seite enthält keine Zugangsdaten. WLAN und die Adresse des
+c64u richtest du danach wie unten beschrieben am Gerät ein. Schlägt die
+Verbindung fehl, helfen die Hinweise auf der Seite weiter.
+
 Damit der M5Dial deinen C64 findet, müssen einmalig die WLAN-Zugangsdaten und
 die Adresse des C64 hinterlegt werden. Das geht **direkt am Gerät** unter
 *Settings → WLAN* – der Quelltext muss dafür nicht mehr angefasst werden. Die
@@ -474,6 +486,20 @@ direct_net  = 192.168.4           M5Dial = .1, c64u = .64
 ```
 
 *Auf SD sichern* schreibt diese Zeilen mit heraus.
+
+## Mehrere Geräte an einem Tisch
+
+Spannen zwei Fernbedienungen gleichzeitig ein Direktnetz auf, brauchen sie
+verschiedene Netznamen – sonst bucht sich ein c64u womöglich beim falschen Gerät
+ein. Dafür gibt es *Direkt-Nr.* im WLAN-Menü: Jeder Druck schaltet weiter von
+*-* (ohne Nummer, `C64uRemote-Direct`) über `C64uRemote-Direct-1` bis `-9` und
+wieder zurück. Jede Nummer nutzt außerdem ihren eigenen Funkkanal (1, 6 oder
+11), damit sich die Netze nicht gegenseitig stören.
+
+Am c64u trägst du genau diesen Netznamen ein – die Seite des Direktmodus zeigt
+ihn an. Läuft der Direktmodus gerade, startet das Netz mit dem neuen Namen sofort
+neu. Ein Name mit Nummer in der `wifi.txt` (`direct_ssid = C64uRemote-Direct-2`)
+wirkt genauso; ein ganz eigener Name erscheint als *frei* und läuft auf Kanal 6.
 
 ## Per Karte ein- und ausschalten
 
