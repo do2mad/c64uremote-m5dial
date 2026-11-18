@@ -2,6 +2,61 @@
 
 C64uRemote für den **M5Dial**. Neueste Version zuerst.
 
+## v1.6.0 – 2026-11-19
+
+### Deutsch
+
+**Neu: c64u per Wake on LAN wecken.** Ab der c64u-Firmware 1.2 lässt sich der
+c64u über WLAN aufwecken (im c64u unter *Power Settings* die Einstellung
+*Wake on LAN* einschalten). Geweckt wird an die WLAN-MAC-Adresse, nicht an die
+IP-Adresse.
+
+- Die MAC holt sich der M5Dial selbst, sobald er den c64u einmal erreicht hat
+  (`/v1/info`, Feld `wifi_mac`), und merkt sie sich dauerhaft.
+- Fehlt der c64u ein paar Sekunden, öffnet sich die Rückfrage „c64u wecken?“ mit
+  NEIN/JA (Drehen wählt, Drücken oder Tippen bestätigt) – einmal pro Ausfall. Nach dem Wecken schaut der M5Dial in kurzen Abständen nach, bis der c64u da ist.
+- Solange der c64u fehlt, öffnet der Menüpunkt Power Off (dann „WECKEN“) dieselbe Rückfrage, statt auszuschalten. Ohne Bestätigung wird nie geweckt.
+- Die MAC lässt sich auch in der `wifi.txt` vorgeben (`mac = …`).
+- Wecken auch im Direktmodus: Der Weckruf geht dann an das eigene Funknetz des M5Dial.
+  Von selbst gefragt wird dort nur, wenn ein Gerät angemeldet ist (der schlafende c64u)
+  und trotzdem 15 s lang kein c64u antwortet.
+- Die Rückfrage zeigt die Auswahl deutlich: Die gewählte Taste ist grün (JA)
+  bzw. rot (NEIN) gefüllt, darunter steht, was die Bestätigung auslöst.
+- POWER weckt auch direkt nach dem Einschalten, solange der c64u noch nicht
+  geantwortet hat – und im Direktmodus auch dann, wenn kein c64u angemeldet ist.
+- JA, bevor das WLAN steht: Es erscheint „WECKRUF FOLGT, SOBALD WLAN DA“, der
+  Weckruf geht dann von selbst hinaus.
+- Der Weckruf wird 30 s lang alle 0,7 s wiederholt, bis der c64u antwortet – ein
+  schlafender c64u hört nur in Abständen ins WLAN. Einmal JA genügt.
+- Ist der c64u nicht erreichbar und Wecken nicht möglich, meldet POWER „c64u
+  NICHT ERREICHBAR“, statt nach dem Ausschalten zu fragen.
+
+### English
+
+**New: wake the c64u with Wake on LAN.** From c64u firmware 1.2 on the c64u can
+be woken over WiFi (enable *Wake on LAN* under *Power Settings* on the c64u).
+The wake-up goes to the WiFi MAC address, not to the IP address.
+
+- The M5Dial fetches the MAC itself as soon as it has reached the c64u once
+  (`/v1/info`, field `wifi_mac`) and keeps it.
+- If the c64u is missing for a few seconds, the request "Wake c64u?" opens with
+  NO/YES (turn to choose, press or tap to confirm) – once per outage. After waking, the M5Dial looks for the c64u at short intervals until it is there.
+- While the c64u is missing, the Power Off menu item (then "WAKE") opens the same request instead of powering off. Nothing is woken without confirmation.
+- The MAC can also be set in `wifi.txt` (`mac = …`).
+- Wake-up in direct mode too: the wake-up then goes to the M5Dial's own WiFi.
+  The request only opens by itself when a device is logged in (the sleeping c64u)
+  and still no c64u answers for 15 s.
+- The request shows the selection clearly: the selected button is filled green
+  (YES) or red (NO), and below it the box says what confirming will do.
+- POWER also wakes right after switching on, as long as the c64u has not
+  answered yet – and in direct mode also when no c64u is logged in.
+- YES before the WiFi is up: "WAKE-UP FOLLOWS WHEN WIFI IS UP" appears, and the
+  call goes out by itself.
+- The wake-up call is repeated every 0.7 s for 30 s until the c64u answers – a
+  sleeping c64u only listens to the WiFi at intervals. One YES is enough.
+- If the c64u cannot be reached and waking is not possible, POWER reports "c64u
+  NOT REACHABLE" instead of asking to power off.
+
 ## v1.5.0 – 2026-10-18
 
 ### Deutsch

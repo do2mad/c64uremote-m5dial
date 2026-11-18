@@ -126,3 +126,11 @@ Auf einem Treffen ohne WLAN spannt der M5Dial selbst ein Netz auf:
 `C64uRemote-Direct` mit dem Passwort `c64ultimate` ein; er bekommt dann die
 Adresse `192.168.4.64`. Ausführlich steht das im **Benutzerhandbuch**, Kapitel
 *Direktmodus*.
+
+# c64u wecken
+
+Ab c64u-Firmware 1.2 weckt der M5Dial den c64u über das WLAN. Am c64u einmal
+unter *Power Settings* „Wake on LAN“ einschalten und ihn eingeschaltet mit dem
+M5Dial verbinden – der merkt sich dabei seine Adresse. Ist der c64u aus, heißt
+*c64u Power Off* im Menü **WECKEN**: auswählen, JA bestätigen, kurz warten.
+Ausführlich steht das im **Benutzerhandbuch**, Kapitel *c64u wecken*.

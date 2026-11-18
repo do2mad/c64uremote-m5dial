@@ -469,6 +469,51 @@ picks the radio channel for `WiFi.softAP()` from it: without a number
 *Direct no.* (`kWifiDirectNum`) steps 0 → 1 … 9 → 0 via `setDirectNum()`, saves
 and restarts a running access point.
 
+# Wake on LAN
+
+From c64u firmware 1.2 on (setting *Wake on LAN* under *Power Settings*). The code
+is a block directly in front of `markTargetMissing()`.
+
+## MAC address
+
+`wolLearnMac()` fetches `/v1/info` once on the transition to "connected + auth
+ok" and reads `wifi_mac`. If it changed it is stored in NVS (namespace
+`c64unet`, key `cmac`). Alternatively `wifi.txt` sets it with `mac = …`.
+Waking only works over WiFi, to the MAC – not to the IP.
+
+## Magic packet
+
+`wolSendMagic(rounds)`: 6 × `FF`, then 16 × the MAC (102 bytes), via UDP to the
+broadcast address of the own network and to `255.255.255.255`, ports 9 and 7
+each. In direct mode the own network is the access point's
+(`softAPBroadcastIP()`). The first call goes out in three rounds (20 ms apart);
+after that `wolService()` repeats it every 700 ms (`kWolRepeatEveryMs`) for 30 s
+(`kWolRepeatForMs`) as a single round without `delay()` until the c64u answers.
+Reason: a sleeping c64u does not even answer ARP and only listens to the WiFi at
+intervals; a single burst was often lost in tests. In parallel the device knocks
+after 4, 8, 13, 20, 30 and 45 s (`kWolRecheckMs`).
+
+## States and operation
+
+| Function | Meaning |
+|---|---|
+| `wolOnTargetMissing()` | sets `gWolMissing` on every failure; in direct mode also when no station is logged in |
+| `wolCanAsk()` | `configReady()` and MAC known – the WiFi need not be up yet |
+| `wolAvailable()` | additionally `netReady()`; required for sending and for the automatic request |
+| `wolTileWakes()` | `wolCanAsk() && (gWolMissing \|\| !targetReachable)` – POWER wakes instead of switching off, also right after start-up |
+| `requestPowerOff()` | without a reachable c64u only the message *c64u NOT REACHABLE* |
+
+Request (`wolAskOpenNow/wolAskSelect/wolAskAnswer`): YES preselected, only a key
+press after opening counts, closes after 20 s (`kWolAskMs`, = NO). It opens by
+itself once per outage, 5 s after the c64u went missing (`kWolAskDelayMs`), only
+on the home screen. In direct mode additionally only when a station has been
+logged in for 15 s and no c64u answers (`wolDirectReady()`). Operation on the
+M5Dial: WAKE menu item; turn selects, press confirms, tap acts at once.
+
+YES without WiFi sets `gWolWakePending`; `wolService()` sends as soon as
+`netReady()` holds and drops the pending call after 60 s (`kWolPendingMaxMs`) or
+when the c64u answers by itself.
+
 # Software architecture
 
 ## State model

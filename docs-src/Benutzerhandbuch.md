@@ -555,6 +555,55 @@ als ein halbes Jahr weglegt, lädt es zwischendurch einmal nach.
 Eine Anzeige der Akkuspannung gibt es nicht: Der M5Dial hat dafür keine
 Messleitung.
 
+# c64u wecken (Wake on LAN)
+
+Ab der c64u-Firmware **1.2** lässt sich der c64u über das WLAN aufwecken – der
+M5Dial schickt dafür einen Weckruf. Einmal einrichten:
+
+1. Am c64u im Menü unter **Power Settings** die Einstellung **Wake on LAN**
+   einschalten.
+2. Den c64u einmal eingeschaltet mit dem M5Dial verbinden. Der M5Dial merkt sich dabei
+   die WLAN-Adresse (MAC) des c64u dauerhaft – mehr ist nicht nötig.
+
+Geweckt wird über das WLAN, und zwar an die MAC-Adresse, nicht an die IP-Adresse.
+
+## Wecken
+
+Ist der c64u aus oder nicht erreichbar, weckt POWER statt auszuschalten.
+Der Menüpunkt **c64u Power Off** heißt dann **WECKEN**. Auswählen öffnet die Rückfrage. Das gilt auch direkt nach dem Einschalten des M5Dial, solange der c64u
+noch nicht geantwortet hat.
+
+Die Rückfrage lautet **„c64u wecken?“** mit NEIN und JA (Vorauswahl JA).
+**Drehen** wechselt zwischen NEIN und JA, **Drücken** bestätigt. Die gewählte Taste ist farbig gefüllt (JA grün, NEIN rot), darunter steht, was der Druck auslöst. Ein **Tipp** auf JA oder NEIN löst direkt aus.
+
+Nach **JA** erscheint *WECKRUF GESENDET*. Der M5Dial wiederholt den Weckruf
+30 Sekunden lang alle 0,7 Sekunden, bis der c64u antwortet – ein schlafender c64u
+hört nur in Abständen ins WLAN. **Einmal JA genügt**; es kann ein paar Sekunden
+dauern, bis der c64u hochfährt.
+
+Steht das WLAN des M5Dial noch nicht (gleich nach dem Einschalten), erscheint
+*WECKRUF FOLGT, SOBALD WLAN DA*. Der Weckruf geht dann von selbst hinaus, sobald
+die Verbindung steht.
+
+Fällt der c64u im Betrieb weg, öffnet sich die Rückfrage nach ein paar Sekunden
+**einmal von selbst**. Bleibt sie 20 Sekunden unbeantwortet, schließt sie sich
+wieder – das zählt als NEIN. Ohne Bestätigung wird nie geweckt.
+
+## Im Direktmodus
+
+Auch im Direktmodus lässt sich wecken; der Weckruf geht dann in das eigene
+Funknetz des M5Dial. Ist kein c64u angemeldet, heißt POWER sofort WECKEN. Von selbst
+gefragt wird dort nur, wenn ein Gerät angemeldet ist (der schlafende c64u) und
+15 Sekunden lang kein c64u antwortet. Ob das Wecken klappt, hängt davon ab, ob
+der schlafende c64u im Direktnetz angemeldet bleibt.
+
+## Gut zu wissen
+
+- Kann der M5Dial gar nicht wecken – die MAC des c64u ist noch unbekannt oder es ist
+  kein WLAN eingerichtet –, meldet POWER *c64u NICHT ERREICHBAR*.
+- Die MAC lässt sich auch in der `wifi.txt` vorgeben: `mac = 00:11:22:33:44:55`.
+- Läuft der c64u, bleibt POWER das normale Ausschalten mit Abfrage.
+
 # Einstellungen im Überblick
 
 Alle Einstellungen werden sofort gespeichert und überstehen einen Neustart.

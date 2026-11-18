@@ -87,8 +87,8 @@ namespace {
 // Firmware version. Keep it up to date with every release - it is shown on
 // the status page and in the boot log and belongs to the CHANGELOG entry.
 // ---------------------------------------------------------------------------
-constexpr const char* kFwVersion = "1.5.0";
-constexpr const char* kFwDate    = "2026-10-18";
+constexpr const char* kFwVersion = "1.6.0";
+constexpr const char* kFwDate    = "2026-11-19";
 
 // ---------------------------------------------------------------------------
 // Network diagnostics on the serial console (115200 baud). Logs every HTTP
@@ -630,6 +630,20 @@ WifiProfile gWifiProfiles[kWifiProfileMax];
 size_t      gWifiCount = 0;
 size_t      gWifiTry   = 0;      // profile for the next connection attempt
 String      gTargetHost;
+// Wake on LAN: WiFi MAC of the c64u ("AA:BB:CC:DD:EE:FF", empty = unknown).
+// Learned from /v1/info when connecting, or taken from wifi.txt.
+String      gC64Mac;
+bool        gWolMissing      = false;   // c64u last seen missing
+uint32_t    gWolMissingSince = 0;       // since when it is missing
+bool        gWolOffered      = false;   // request already shown for this outage
+bool        gWolAskOpen      = false;   // request "Wake c64u?" is open
+bool        gWolAskYes       = true;    // choice in the request
+bool        gWolAskArmed     = false;   // button pressed after opening
+uint32_t    gWolAskOpenedMs  = 0;
+uint32_t    gWolAskUntilMs   = 0;       // closes by itself
+uint32_t    gWolWakeAtMs     = 0;       // time of the last wake-up
+uint8_t     gWolRecheckIdx   = 0;
+String normalizeMac(const String& text);
 String      gTargetPass;
 
 WifiScanEntry gWifiScan[kWifiScanMax];
@@ -2181,11 +2195,258 @@ ProbeState probePoll(uint32_t now) {
   return ProbeState::Answered;
 }
 
+// ===========================================================================
+//  Wake on LAN
+// ===========================================================================
+// From c64u firmware 1.2 on the c64u can be woken over WiFi (setting
+// "Wake on LAN" in the Power Settings group). It is woken by a magic packet to
+// its WiFi MAC - not to its IP address. The c64u reports the MAC under /v1/info
+// as "wifi_mac"; it is learned when connecting and stored.
+// If the c64u is missing for a while, the request "Wake c64u?" opens with
+// YES/NO (turn to choose, press or tap to confirm) - once per outage.
+// The Power Off menu item is then called WAKE and opens the same request.
+// In direct mode the wake-up goes to the device's own WiFi; the request only
+// appears there when a device is logged in (the sleeping c64u).
+const uint16_t kWolColOk   = kColOk;
+const uint16_t kWolColWarn = kColWarn;
+const uint16_t kWolColErr  = kColErr;
+constexpr uint32_t kWolAskDelayMs  = 5000;    // c64u must be missing this long
+constexpr uint32_t kWolAskDirectMs = 15000;   // direct mode: time after login
+constexpr uint32_t kWolAskMs       = 20000;   // request closes itself (= NO)
+// After the wake-up, look for the c64u at these times (ms after sending)
+constexpr uint32_t kWolRecheckMs[] = {4000, 8000, 13000, 20000, 30000, 45000};
+constexpr uint8_t  kWolRecheckCount = sizeof(kWolRecheckMs) / sizeof(kWolRecheckMs[0]);
+// The wake-up call is repeated every 0.7 s for 30 s (ms after the first
+// send). A sleeping c64u only listens to the WiFi at intervals; a single
+// burst of packets is easily lost then. Repeating stops as soon as it
+// answers.
+constexpr uint32_t kWolRepeatEveryMs = 700;
+constexpr uint32_t kWolRepeatForMs   = 30000;
+uint32_t gWolLastRepeatMs = 0;
+// YES confirmed, but the WiFi is not up yet (e.g. right after power-on):
+// the wake-up call goes out as soon as the connection is there.
+bool     gWolWakePending   = false;
+uint32_t gWolPendingSince  = 0;
+constexpr uint32_t kWolPendingMaxMs = 60000;   // give up after this
+
+int hexNibble(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
+// Reads 12 hex digits, separators (: - . space) are ignored.
+bool parseMac(const String& text, uint8_t out[6]) {
+  int digits = 0;
+  for (size_t i = 0; i < text.length(); ++i) {
+    const char c = text[i];
+    if (c == ':' || c == '-' || c == '.' || c == ' ') continue;
+    const int v = hexNibble(c);
+    if (v < 0 || digits >= 12) return false;
+    if (digits % 2 == 0) out[digits / 2] = static_cast<uint8_t>(v << 4);
+    else                 out[digits / 2] |= static_cast<uint8_t>(v);
+    ++digits;
+  }
+  if (digits != 12) return false;
+  bool allZero = true, allFf = true;
+  for (int i = 0; i < 6; ++i) { allZero &= (out[i] == 0); allFf &= (out[i] == 0xFF); }
+  return !allZero && !allFf;
+}
+
+String normalizeMac(const String& text) {
+  uint8_t mac[6];
+  if (!parseMac(text, mac)) return String();
+  char buf[18];
+  snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  return String(buf);
+}
+
+bool wolAvailable() {
+  return netReady() && configReady() && !gC64Mac.isEmpty();
+}
+
+// The prompt and WAKE are offered before the WiFi is up - the call is then
+// sent as soon as it is there (gWolWakePending).
+bool wolCanAsk() { return configReady() && !gC64Mac.isEmpty(); }
+
+// While the c64u is missing or not (yet) reachable - also right after
+// power-on - POWER wakes instead of switching off.
+bool wolTileWakes() { return wolCanAsk() && (gWolMissing || !app.connection.targetReachable); }
+
+// The request only appears on the home screen and in the ring menu.
+bool wolAskScreen() {
+  return app.screen == ScreenMode::Home || app.screen == ScreenMode::Menu;
+}
+
+// In direct mode only ask once a device is logged in to the own access
+// point and still no c64u answers for a while - a freshly starting c64u
+// first needs DHCP and its HTTP server.
+bool wolDirectReady(uint32_t now) {
+  static uint32_t stationSince = 0;
+  if (!gDirectMode) { stationSince = 0; return true; }
+  if (directStationCount() == 0) { stationSince = 0; return false; }
+  if (stationSince == 0) stationSince = now | 1u;
+  return now - stationSince >= kWolAskDirectMs;
+}
+
+// Magic packet: 6x FF, then the MAC 16 times. Sent as broadcast into the own
+// network (ports 9 and 7), three times - UDP does not always arrive. In direct
+// mode the own network is the M5Dial's WiFi.
+bool wolSendMagic(uint8_t rounds = 3) {
+  uint8_t mac[6];
+  if (!parseMac(gC64Mac, mac)) return false;
+  uint8_t packet[102];
+  memset(packet, 0xFF, 6);
+  for (int i = 0; i < 16; ++i) memcpy(packet + 6 + i * 6, mac, 6);
+
+  const IPAddress bcast = gDirectMode ? WiFi.softAPBroadcastIP() : WiFi.broadcastIP();
+  const IPAddress targets[2] = {bcast, IPAddress(255, 255, 255, 255)};
+  const uint16_t  ports[2]   = {9, 7};
+  WiFiUDP udp;
+  bool sent = false;
+  for (uint8_t round = 0; round < rounds; ++round) {
+    for (const IPAddress& ip : targets) {
+      for (const uint16_t port : ports) {
+        if (!udp.beginPacket(ip, port)) continue;
+        udp.write(packet, sizeof(packet));
+        if (udp.endPacket()) sent = true;
+      }
+    }
+    if (round + 1 < rounds) delay(20);
+  }
+  udp.stop();
+  return sent;
+}
+
+void wolWake(uint32_t now) {
+  gWolOffered = true;
+  if (!netReady()) {
+    gWolWakePending  = true;
+    gWolPendingSince = now;
+    beep(1500, 40);
+    setModal("WAKE-UP FOLLOWS WHEN WIFI IS UP", kWolColWarn, now, 3000);
+    return;
+  }
+  if (!wolSendMagic()) {
+    setModal("WAKE-UP FAILED", kWolColErr, now, 2000);
+    return;
+  }
+  beep(2200, 60);
+  setModal("WAKE-UP SENT", kWolColOk, now, 2500);
+  gWolWakeAtMs   = now;
+  gWolLastRepeatMs = now;
+  gWolRecheckIdx = 0;
+}
+
+// Open the request "Wake c64u?". YES preselected, press confirms.
+void wolAskOpenNow(uint32_t now) {
+  gWolOffered     = true;          // opens by itself once per outage
+  gWolAskOpen     = true;
+  gWolAskYes      = true;
+  gWolAskArmed    = false;         // only a new button press counts
+  gWolAskOpenedMs = now;
+  gWolAskUntilMs  = now + kWolAskMs;
+  app.modalText   = "";
+  noteInteraction(now);
+  beep(1200, 60);
+}
+
+void wolAskAnswer(uint32_t now, bool yes) {
+  gWolAskOpen = false;
+  noteInteraction(now);
+  if (yes) wolWake(now);
+  else     beep(1500, 20);
+}
+
+// Called on every failed connection attempt.
+void wolOnTargetMissing(uint32_t now) {
+  if (gWolMissing) return;
+  gWolMissing      = true;
+  gWolMissingSince = now;
+}
+
+// Fetches the WiFi MAC from /v1/info (c64u firmware 1.2 and later) and stores it.
+void wolLearnMac() {
+  const ApiResponse info = sendApiRequest("GET", "/v1/info", true);
+  if (!info.jsonOk) return;
+  DynamicJsonDocument doc(1024);
+  if (deserializeJson(doc, info.body) != DeserializationError::Ok) return;
+  const String mac = normalizeMac(String(doc["wifi_mac"] | ""));
+  if (mac.isEmpty() || mac == gC64Mac) return;
+  gC64Mac = mac;
+  prefs.begin("c64unet", false);
+  prefs.putString("cmac", gC64Mac);
+  prefs.end();
+}
+
+// Runs on every loop() pass.
+void wolService(uint32_t now) {
+  // When the connection is new, fetch the c64u's MAC.
+  static bool wasOk = false;
+  const bool ok = app.connection.wifiConnected && app.connection.authOk;
+  if (ok && !wasOk) wolLearnMac();
+  wasOk = ok;
+
+  const bool directReady = wolDirectReady(now);
+  if (app.connection.targetReachable) {
+    gWolMissing  = false;
+    gWolOffered  = false;     // ask again on the next outage
+    gWolWakeAtMs = 0;
+    gWolWakePending = false;
+    gWolAskOpen  = false;     // it came back by itself
+  }
+
+  // Send a queued wake-up call as soon as the WiFi is up.
+  if (gWolWakePending) {
+    if (netReady()) {
+      gWolWakePending = false;
+      wolWake(now);
+    } else if (now - gWolPendingSince >= kWolPendingMaxMs) {
+      gWolWakePending = false;
+    }
+  }
+
+  if (gWolAskOpen) {
+    if (!wolCanAsk() || !wolAskScreen() ||
+        static_cast<int32_t>(now - gWolAskUntilMs) >= 0) {
+      gWolAskOpen = false;
+    }
+  } else if (gWolMissing && !gWolOffered && gWolWakeAtMs == 0 && directReady &&
+             wolAvailable() && wolAskScreen() && !modalVisible(now) &&
+             now - gWolMissingSince >= kWolAskDelayMs) {
+    wolAskOpenNow(now);
+  }
+
+  // Repeat the wake-up call until the c64u answers (see kWolRepeatEveryMs).
+  if (gWolWakeAtMs != 0 && !app.connection.targetReachable &&
+      now - gWolWakeAtMs < kWolRepeatForMs && now - gWolLastRepeatMs >= kWolRepeatEveryMs) {
+    gWolLastRepeatMs = now;
+    wolSendMagic(1);
+  }
+
+  // After the wake-up knock at short intervals instead of every 15 s.
+  if (gWolWakeAtMs != 0) {
+    if (gWolRecheckIdx >= kWolRecheckCount) {
+      gWolWakeAtMs = 0;
+    } else if (now - gWolWakeAtMs >= kWolRecheckMs[gWolRecheckIdx]) {
+      ++gWolRecheckIdx;
+      if (gProbeFd < 0) app.lastConnectionProbeMs = 0;
+    }
+  }
+}
+
+const char* menuLabelFor(int index) {
+  return (index == kMenuPowerOff && wolTileWakes()) ? "WAKE" : kMenuLabels[index];
+}
+
 void markTargetMissing() {
   app.connection.targetReachable = false;
   app.connection.authOk          = false;
   app.connection.detail          = "Target unreachable";
   directNextCandidate();                 // in direct mode try the next address
+  wolOnTargetMissing(millis());
 }
 
 // The actual status query via HTTP.
@@ -2201,6 +2462,7 @@ void probeTargetNow(uint32_t now) {
   if (!reach.transportOk) {
     app.connection.authOk = false;
     app.connection.detail = reach.errors.isEmpty() ? "Target unreachable" : reach.errors;
+    wolOnTargetMissing(now);
     directNextCandidate();
   } else if (gDirectMode && !looksLikeC64u) {
     // Someone answered in the direct network, but not a c64u - keep looking.
@@ -2253,6 +2515,9 @@ void refreshConnectionStatus(uint32_t now, bool force = false) {
     app.connection.targetReachable = false;
     app.connection.authOk          = false;
     app.connection.detail          = "Direct: c64u not connected";
+    // A c64u that was switched off leaves the network - it is missing then,
+    // and POWER wakes instead of switching off.
+    wolOnTargetMissing(now);
     return;
   }
 
@@ -2335,6 +2600,12 @@ void performPowerOff(uint32_t now) {
 }
 
 void requestPowerOff(uint32_t now) {
+  // Without a reachable c64u there is nothing to switch off.
+  if (!app.connection.targetReachable) {
+    app.pendingPowerOff = false;
+    setModal("c64u NOT REACHABLE", kColErr, now, 2000);
+    return;
+  }
   if (app.pendingPowerOff && (now - app.pendingPowerOffAtMs <= powerOffConfirmMs())) {
     performPowerOff(now);
     return;
@@ -2978,6 +3249,7 @@ void saveNetConfig() {
   prefs.putString("dssid", gDirectSsid);
   prefs.putString("dpass", gDirectPass);
   prefs.putString("dnet",  gDirectNet);
+  prefs.putString("cmac",  gC64Mac);
   prefs.end();
 }
 
@@ -3004,6 +3276,7 @@ void loadNetConfig() {
   gDirectSsid = prefs.getString("dssid", kDirectSsidDef);
   gDirectPass = prefs.getString("dpass", kDirectPassDef);
   gDirectNet  = prefs.getString("dnet",  kDirectNetDef);
+  gC64Mac     = normalizeMac(prefs.getString("cmac", ""));
   prefs.end();
 
   // Replace unusable direct network values with the defaults. WPA2
@@ -3287,6 +3560,10 @@ size_t loadWifiFromSd(String* errorOut) {
     if (key == "ssid")                              { flush(); ssid = value; }
     else if (key == "pass" || key == "password")    { pass = value; }
     else if (key == "host")                         { if (!value.isEmpty()) gTargetHost = value; }
+    else if (key == "mac" || key == "c64u_mac" || key == "wol_mac") {
+      const String mac = normalizeMac(value);
+      if (!mac.isEmpty()) gC64Mac = mac;
+    }
     else if (key == "hostpass" || key == "hostpassword") { gTargetPass = value; }
     else if (key == "direct") {
       String v = value;
@@ -5336,6 +5613,7 @@ void drawMainMenu(uint32_t now) {
     if (i == kMenuPowerOff) {
       border = selected ? kColWarn : rgb565(120, 80, 40);
       if (app.pendingPowerOff) fill = rgb565(140, 70, 30);
+      if (wolTileWakes()) border = selected ? kColInfo : rgb565(40, 100, 130);
     }
     if (i == kMenuStatus) {
       icon = connectionColor();
@@ -5996,6 +6274,47 @@ void drawModalOverlay(uint32_t now) {
   drawClipped(app.modalText, kCx, y + 44, boxW - 16, app.modalColor, middle_center);
 }
 
+// ---------------------------------------------------------------------------
+// Request "Wake c64u?" (Wake on LAN)
+// ---------------------------------------------------------------------------
+constexpr int kWolBoxX = 22, kWolBoxY = 56, kWolBoxW = 196, kWolBoxH = 128;
+constexpr int kWolBtnY = kWolBoxY + 62, kWolBtnW = 78, kWolBtnH = 32;
+constexpr int kWolBtnNoX = kCx - 6 - kWolBtnW, kWolBtnYesX = kCx + 6;
+
+// The selected button is filled in colour (YES green, NO red); below it the
+// box says what pressing the knob will do.
+void drawWolButton(int x, const char* label, bool selected, uint16_t color) {
+  gDraw->fillRoundRect(x, kWolBtnY, kWolBtnW, kWolBtnH, 8, selected ? color : kColPanel);
+  gDraw->drawRoundRect(x, kWolBtnY, kWolBtnW, kWolBtnH, 8, selected ? TFT_WHITE : kColLine);
+  if (selected) gDraw->drawRoundRect(x + 1, kWolBtnY + 1, kWolBtnW - 2, kWolBtnH - 2, 7, TFT_WHITE);
+  fontText();
+  drawClipped(label, x + kWolBtnW / 2, kWolBtnY + kWolBtnH / 2, kWolBtnW - 8,
+              selected ? TFT_BLACK : kColLine, middle_center);
+}
+
+void drawWolAsk() {
+  if (!gWolAskOpen) return;
+  gDraw->fillRoundRect(kWolBoxX, kWolBoxY, kWolBoxW, kWolBoxH, 14, kColBg);
+  gDraw->drawRoundRect(kWolBoxX, kWolBoxY, kWolBoxW, kWolBoxH, 14, kWolColWarn);
+  gDraw->fillRoundRect(kWolBoxX + 8, kWolBoxY + 8, kWolBoxW - 16, 5, 2, kWolColWarn);
+  fontText();
+  drawClipped("c64u not found", kCx, kWolBoxY + 22, kWolBoxW - 16, kWolColWarn, middle_center);
+  fontBig();
+  drawClipped("Wake c64u?", kCx, kWolBoxY + 45, kWolBoxW - 16, kColText, middle_center);
+  drawWolButton(kWolBtnNoX,  "NO", !gWolAskYes, kColErr);
+  drawWolButton(kWolBtnYesX, "YES",  gWolAskYes, kColOk);
+  fontText();
+  drawClipped(gWolAskYes ? "Press = send wake-up" : "Press = do not wake", kCx, kWolBoxY + 110,
+              kWolBoxW - 16, gWolAskYes ? kColOk : kColErr, middle_center);
+}
+
+// Tap in the request: on YES or NO, nothing happens elsewhere.
+void wolAskTouch(int tx, int ty, uint32_t now) {
+  if (ty < kWolBtnY - 8 || ty > kWolBtnY + kWolBtnH + 8) return;
+  if (tx >= kWolBtnNoX - 8 && tx < kCx)                    wolAskAnswer(now, false);
+  else if (tx >= kCx && tx <= kWolBtnYesX + kWolBtnW + 8)  wolAskAnswer(now, true);
+}
+
 void render(uint32_t now) {
   switch (app.screen) {
     case ScreenMode::Home:        drawHome(now);         break;
@@ -6019,6 +6338,7 @@ void render(uint32_t now) {
     case ScreenMode::Busy:        drawBusyScreen();      return;   // pushes by itself
   }
   drawModalOverlay(now);
+  drawWolAsk();
   endFrame();
 }
 
@@ -6031,7 +6351,7 @@ void setScreen(ScreenMode next, uint32_t now) {
   app.encoderBase     = M5Dial.Encoder.read();
   app.encoderResidual = 0;
   if (next == ScreenMode::Home) resetHomeAnimation(now);
-  if (next == ScreenMode::Menu) showMenuLabel(kMenuLabels[app.menuIndex], now);
+  if (next == ScreenMode::Menu) showMenuLabel(menuLabelFor(app.menuIndex), now);
 }
 
 // ===========================================================================
@@ -6479,7 +6799,7 @@ void handleMenuSelect(uint32_t now) {
   noteInteraction(now);
   beep(1900, 18);        // acknowledge the press at once, the result follows
   switch (app.menuIndex) {
-    case kMenuPowerOff:  requestPowerOff(now);  break;   // Menu always asks
+    case kMenuPowerOff:  if (wolTileWakes()) { wolAskOpenNow(now); break; } requestPowerOff(now);  break;   // Menu always asks
     case kMenuReset:     performReset(now);     break;
     case kMenuReboot:    performHardReset(now); break;
     case kMenuUltiMenu:  performMenuButton(now);break;
@@ -7022,7 +7342,7 @@ void moveSelection(int delta, uint32_t now) {
       const int count = static_cast<int>(kMenuCount);
       app.menuIndex = ((app.menuIndex + delta) % count + count) % count;
       clearPendingPowerOff();
-      showMenuLabel(kMenuLabels[app.menuIndex], now);
+      showMenuLabel(menuLabelFor(app.menuIndex), now);
       break;
     }
     case ScreenMode::CpuMenu: {
@@ -7210,6 +7530,12 @@ void handleEncoder(uint32_t now) {
   while (app.encoderResidual <= -stepTicks) { delta -= 1; app.encoderResidual += stepTicks; }
   if (delta == 0) return;
 
+  if (gWolAskOpen) {                // // request: turning toggles YES/NO
+    gWolAskYes     = !gWolAskYes;
+    gWolAskUntilMs = now + kWolAskMs;
+    beep(1700, 12);
+    return;
+  }
   if (app.screen == ScreenMode::Home) {
     setScreen(ScreenMode::Menu, now);
     return;                       // the first turn only opens the menu
@@ -7224,6 +7550,18 @@ void handleButton(uint32_t now) {
   if (M5Dial.BtnA.wasPressed()) {
     app.buttonHandled = false;
     noteInteraction(now);
+  }
+
+  // Request "Wake c64u?": pressing confirms the choice. A press that
+  // started before it opened does not count.
+  if (gWolAskOpen) {
+    if (M5Dial.BtnA.wasPressed()) gWolAskArmed = true;
+    if (M5Dial.BtnA.wasReleased() && gWolAskArmed) {
+      app.buttonHandled = true;
+      beep(2000, 20);
+      wolAskAnswer(now, gWolAskYes);
+    }
+    return;
   }
 
   // In the ring menu on "c64u Power Off": a long press (1.5 s) switches the
@@ -7277,7 +7615,7 @@ void handleTouchTap(int tx, int ty, uint32_t now) {
       const int index = menuIndexFromTouch(tx, ty);
       if (index < 0) return;
       app.menuIndex = index;
-      showMenuLabel(kMenuLabels[app.menuIndex], now);
+      showMenuLabel(menuLabelFor(app.menuIndex), now);
       beep(2000, 20);
       handleMenuSelect(now);
       return;
@@ -7375,6 +7713,8 @@ void handleTouch(uint32_t now) {
       app.touchStartX   = touch.x;
       app.touchStartY   = touch.y;
       noteInteraction(now);
+    } else if (gWolAskOpen) {
+      // request open: no long-press actions
     } else if (!app.touchLongDone && app.screen == ScreenMode::Menu &&
                menuIndexFromTouch(app.touchStartX, app.touchStartY) == kMenuPowerOff) {
       // A long touch on "c64u Power Off" switches the M5Dial off.
@@ -7399,6 +7739,13 @@ void handleTouch(uint32_t now) {
   if (app.touchStartX < 0 || app.touchStartY < 0) return;
 
   noteInteraction(now);
+  // request open: only taps that started afterwards
+  if (gWolAskOpen) {
+    if (static_cast<int32_t>(app.touchStartMs - gWolAskOpenedMs) >= 0) {
+      wolAskTouch(app.touchStartX, app.touchStartY, now);
+    }
+    return;
+  }
   handleTouchTap(app.touchStartX, app.touchStartY, now);
 }
 
@@ -7614,6 +7961,7 @@ void loop() {
   servicePortal(now);
   serviceWiFi(now);
   refreshConnectionStatus(now);
+  wolService(now);
   netDiagState(now);         // print the network state every 10 s (see kNetDiag)
 
   // PowerOff confirmations expire after the time window

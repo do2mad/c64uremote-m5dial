@@ -474,6 +474,51 @@ wie bisher `kDirectChannel` (6), sonst reihum 1, 6, 11. Der Menüpunkt
 *Direkt-Nr.* (`kWifiDirectNum`) schaltet über `setDirectNum()` 0 → 1 … 9 → 0,
 speichert und startet einen laufenden Accesspoint neu.
 
+# Wake on LAN
+
+Ab c64u-Firmware 1.2 (Einstellung *Wake on LAN* unter *Power Settings*). Der Code
+steht als Block direkt vor `markTargetMissing()`.
+
+## MAC-Adresse
+
+`wolLearnMac()` holt beim Übergang auf „verbunden + Auth ok“ einmal `/v1/info`
+und liest `wifi_mac`. Geändert gespeichert wird sie in der NVS (Namespace
+`c64unet`, Schlüssel `cmac`). Alternativ setzt die `wifi.txt` sie mit `mac = …`.
+Geweckt wird nur über WLAN, an die MAC – nicht an die IP.
+
+## Magic Packet
+
+`wolSendMagic(rounds)`: 6 × `FF`, dann 16 × die MAC (102 Byte), per UDP an den
+Broadcast des eigenen Netzes und an `255.255.255.255`, jeweils Port 9 und 7. Im
+Direktmodus ist das eigene Netz das des Accesspoints (`softAPBroadcastIP()`).
+Der erste Weckruf geht in drei Runden (20 ms Abstand), danach wiederholt
+`wolService()` ihn alle 700 ms (`kWolRepeatEveryMs`) 30 s lang
+(`kWolRepeatForMs`) als einzelne Runde ohne `delay()`, bis der c64u antwortet.
+Grund: Ein schlafender c64u antwortet nicht einmal auf ARP und hört nur in
+Abständen ins WLAN; ein einzelnes Bündel ging in Tests oft verloren. Parallel
+wird nach 4, 8, 13, 20, 30 und 45 s angeklopft (`kWolRecheckMs`).
+
+## Zustände und Bedienung
+
+| Funktion | Bedeutung |
+|---|---|
+| `wolOnTargetMissing()` | setzt `gWolMissing` bei jedem Fehlschlag; im Direktmodus auch, wenn keine Station angemeldet ist |
+| `wolCanAsk()` | `configReady()` und MAC bekannt – WLAN muss noch nicht stehen |
+| `wolAvailable()` | zusätzlich `netReady()`; Voraussetzung zum Senden und für die automatische Rückfrage |
+| `wolTileWakes()` | `wolCanAsk() && (gWolMissing \|\| !targetReachable)` – POWER weckt statt auszuschalten, auch direkt nach dem Start |
+| `requestPowerOff()` | ohne erreichbaren c64u nur die Meldung *c64u NICHT ERREICHBAR* |
+
+Rückfrage (`wolAskOpenNow/wolAskSelect/wolAskAnswer`): Vorauswahl JA, nur ein
+Tastendruck nach dem Öffnen zählt, schließt nach 20 s (`kWolAskMs`, = NEIN).
+Automatisch öffnet sie sich einmal pro Ausfall, 5 s nachdem der c64u fehlt
+(`kWolAskDelayMs`), nur auf dem Hauptbildschirm. Im Direktmodus zusätzlich erst,
+wenn eine Station 15 s angemeldet ist und kein c64u antwortet (`wolDirectReady()`).
+Bedienung am M5Dial: Menüpunkt WECKEN; drehen wählt, drücken bestätigt, Tipp löst direkt aus.
+
+JA ohne WLAN setzt `gWolWakePending`; `wolService()` sendet, sobald `netReady()`
+gilt, und verwirft die Vormerkung nach 60 s (`kWolPendingMaxMs`) oder wenn der
+c64u von selbst antwortet.
+
 # Softwarearchitektur
 
 ## Zustandsmodell

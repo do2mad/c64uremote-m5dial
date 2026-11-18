@@ -283,6 +283,14 @@ auf `192.168.2.x` um. In der `wifi.txt` heißen die Zeilen `direct`, `direct_ssi
 
 ---
 
+### c64u wecken (Wake on LAN, seit v1.6.0)
+
+Ab c64u-Firmware 1.2 (am c64u unter *Power Settings* „Wake on LAN“ einschalten)
+weckt der M5Dial den c64u über das WLAN. Die MAC-Adresse lernt er beim ersten
+Verbinden selbst. Ist der c64u aus, wird POWER zu **WECKEN** und fragt
+„c64u wecken?“ – nach JA wird der Weckruf 30 s lang wiederholt, bis der c64u
+antwortet. Einzelheiten stehen im Benutzerhandbuch, Kapitel *c64u wecken*.
+
 ## 4. Bedienung
 
 | Eingabe | Wirkung |

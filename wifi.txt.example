@@ -26,6 +26,11 @@ pass = geheim123
 host     = 192.168.0.64
 hostpass =
 
+# WLAN-MAC des c64u fuer Wake on LAN (optional, ab c64u-Firmware 1.2).
+# Normalerweise nicht noetig: das Geraet holt sie sich selbst, sobald es den
+# c64u einmal erreicht hat. Steht im c64u unter System Information.
+#mac      = 24:0A:C4:00:00:00
+
 # Direktmodus (optional): der M5Dial spannt selbst ein WLAN auf, der c64u meldet
 # sich dort an - fuer Treffen ohne Router. Am c64u einmal SSID und Passwort
 # dieses Netzes eintragen; er bekommt dann die Adresse <direct_net>.64.
